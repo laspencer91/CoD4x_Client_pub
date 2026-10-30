@@ -5434,8 +5434,45 @@ void __cdecl CL_WriteVoicePacket()
 }
 
 
+#ifdef COD4X_TEST_ISOLATION
+/* Test builds: run the commands a test harness drops into the file COD4X_TEST_COMMANDS names
+   (written elsewhere and renamed into place), so a run can be driven step by step. */
+static void CL_RunTestCommandFile( void )
+{
+	static int nextCheck;
+	wchar_t path[MAX_OSPATH];
+	char text[4096];
+	FILE *f;
+	size_t len;
+
+	if ( Sys_Milliseconds() < nextCheck )
+	{
+		return;
+	}
+	nextCheck = Sys_Milliseconds() + 250;
+	if ( !GetEnvironmentVariableW(L"COD4X_TEST_COMMANDS", path, MAX_OSPATH) )
+	{
+		return;
+	}
+	f = _wfopen(path, L"rb");
+	if ( !f )
+	{
+		return;
+	}
+	len = fread(text, 1, sizeof(text) - 2, f);
+	fclose(f);
+	_wremove(path);
+	text[len] = '\n';
+	text[len + 1] = '\0';
+	Cbuf_AddText(text);
+}
+#endif
+
 void CL_Frame( )
 {
+#ifdef COD4X_TEST_ISOLATION
+	CL_RunTestCommandFile( );
+#endif
 	if ( !clientUIActives.cl_running )
 	{
 		return;

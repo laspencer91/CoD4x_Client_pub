@@ -104,7 +104,12 @@ static HMODULE dllHandle;
 /* Called once on initialization */
 qboolean Sys_InitializeGlobalCriticalSection()
 {
+#ifdef COD4X_TEST_ISOLATION
+	/* Test builds run several clients at once; a named event is shared between them. */
+	mainThreadSuspended = CreateEvent(NULL,FALSE,FALSE,NULL);
+#else
 	mainThreadSuspended = CreateEvent(NULL,FALSE,FALSE,"MainThreadSuspendingOnBeginFrame");
+#endif
 	if(mainThreadSuspended)
 	{
 		return qtrue;

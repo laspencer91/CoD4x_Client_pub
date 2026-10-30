@@ -97,7 +97,8 @@ and `BG_GetWeaponDef()` (CoD4x's relocated weapon table, not the stock one).
 
 **Particle draws.** If the renderer sets `VSMOKE_WANTS_PARTICLE_DRAWS` and returns a table
 from `particles_begin`, the bridge swaps the device object's method-table pointer to a private
-copy with entries 81..84 (`DrawPrimitive`, `DrawIndexedPrimitive`, `DrawPrimitiveUP`,
+copy of the whole table (the 119 public entries and the internal virtual functions Direct3D calls
+through the same table; copying only the public part crashed inside `d3d9.dll`), with entries 81..84 (`DrawPrimitive`, `DrawIndexedPrimitive`, `DrawPrimitiveUP`,
 `DrawIndexedPrimitiveUP`) replaced, and restores the original pointer in `particles_end`. Only
 that device object changes and only for the emissive pass; `d3d9.dll`'s code and its shared
 table are never written. A maintainer who prefers an engine-level draw hook can replace this

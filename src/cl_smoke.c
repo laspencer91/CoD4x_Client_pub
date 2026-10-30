@@ -79,7 +79,8 @@ _Static_assert(sizeof(vsmokeBulletParams_t) == 64, "BulletFireParams layout");
 _Static_assert(offsetof(vsmokeBulletTrace_t, hitPos) == 48, "BulletTraceResults layout");
 
 #define CENTITY_CLIENTNUM_OFFSET 0xcc  /* entity number read at the simulated-trace call */
-#define VSMOKE_DEVICE_METHODS    119   /* IDirect3DDevice9 vtable entries */
+#define VSMOKE_DEVICE_METHODS    119   /* IDirect3DDevice9 interface entries */
+#define VSMOKE_SHADOW_ENTRIES    1024  /* the runtime's device class has further internal virtuals */
 
 /* Read by VSmoke_Stub_SceneDepth. */
 byte cl_smoke_sceneDepth;
@@ -111,8 +112,10 @@ static struct
 	qboolean settingsSent;
 	qboolean deviceLive;
 	qboolean featherForced;
-	void *shadowVtbl[VSMOKE_DEVICE_METHODS];
+	void *shadowVtbl[VSMOKE_SHADOW_ENTRIES];
 	void **savedVtbl;
+	unsigned int hits[6]; /* composite, prepare, particles, effects, bullets, particle draw routing */
+	int shadowEntries;
 	vsmoke_draw_table_t nativeDraws;
 } smoke;
 
@@ -265,6 +268,8 @@ static void CL_Smoke_Status_f(void)
 	{
 		Com_Printf(CON_CHANNEL_DONT_FILTER, "Volumetric smoke: %s\n", text);
 	}
+	Com_Printf(CON_CHANNEL_DONT_FILTER, "Volumetric smoke: hooks composite=%u prepare=%u particles=%u effects=%u bullets=%u routed=%u\n",
+		smoke.hits[0], smoke.hits[1], smoke.hits[2], smoke.hits[3], smoke.hits[4], smoke.hits[5]);
 	Com_Printf(CON_CHANNEL_DONT_FILTER, "Volumetric smoke: quality %s (r_volumetricSmokeQuality full|half|quarter)\n",
 		smokeQualityNames[r_volumetricSmokeQuality->integer >= 0 && r_volumetricSmokeQuality->integer < 3 ? r_volumetricSmokeQuality->integer : 1]);
 }
@@ -489,6 +494,8 @@ void CL_Smoke_Composite(const vsmokeViewInfo_t *info)
 	vsmoke_frame_t frame;
 	vsmoke_view_t view;
 
+	++smoke.hits[0];
+
 	if ( smoke.renderer && smoke.renderer->composite && CL_Smoke_BuildFrame(info, &frame, &view) )
 	{
 		smoke.renderer->composite(&frame, &view);
@@ -500,10 +507,44 @@ void CL_Smoke_Prepare(const vsmokeViewInfo_t *info)
 	vsmoke_frame_t frame;
 	vsmoke_view_t view;
 
+	++smoke.hits[1];
+
 	if ( smoke.renderer && smoke.renderer->prepare && CL_Smoke_BuildFrame(info, &frame, &view) )
 	{
 		smoke.renderer->prepare(&frame, &view);
 	}
+}
+
+/* Copies the device's whole method table: the public IDirect3DDevice9 entries and the internal
+   virtual functions Direct3D's own code calls through the same table (all in one module). */
+static qboolean CL_Smoke_CopyMethodTable(void **vtbl)
+{
+	HMODULE owner = NULL, entry;
+	MEMORY_BASIC_INFORMATION info;
+	int i;
+
+	if ( !GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCWSTR)vtbl[0], &owner) )
+	{
+		return qfalse;
+	}
+	for ( i = 0; i < VSMOKE_SHADOW_ENTRIES; ++i )
+	{
+		if ( !VirtualQuery(&vtbl[i], &info, sizeof(info)) || info.State != MEM_COMMIT || (info.Protect & (PAGE_NOACCESS | PAGE_GUARD)) )
+		{
+			break;
+		}
+		if ( !GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCWSTR)vtbl[i], &entry) || entry != owner )
+		{
+			break;
+		}
+		smoke.shadowVtbl[i] = vtbl[i];
+	}
+	if ( i < VSMOKE_DEVICE_METHODS || i == VSMOKE_SHADOW_ENTRIES )
+	{
+		return qfalse; /* not a table this bridge understands: leave the device alone */
+	}
+	smoke.shadowEntries = i;
+	return qtrue;
 }
 
 void CL_Smoke_ParticlesBegin(const vsmokeViewInfo_t *info)
@@ -514,6 +555,7 @@ void CL_Smoke_ParticlesBegin(const vsmokeViewInfo_t *info)
 	IDirect3DDevice9 *device;
 	void **vtbl;
 
+	++smoke.hits[2];
 	if ( !smoke.renderer || !smoke.renderer->particles_begin || !CL_Smoke_BuildFrame(info, &frame, &view) )
 	{
 		return;
@@ -527,13 +569,17 @@ void CL_Smoke_ParticlesBegin(const vsmokeViewInfo_t *info)
 	   copy of its method table; Direct3D's own code and tables are not modified. */
 	device = r_dx.device;
 	vtbl = *(void***)device;
-	memcpy(smoke.shadowVtbl, vtbl, sizeof(smoke.shadowVtbl));
+	if ( !CL_Smoke_CopyMethodTable(vtbl) )
+	{
+		return;
+	}
 	if ( draws->draw_primitive ) smoke.shadowVtbl[81] = (void*)draws->draw_primitive;
 	if ( draws->draw_indexed_primitive ) smoke.shadowVtbl[82] = (void*)draws->draw_indexed_primitive;
 	if ( draws->draw_primitive_up ) smoke.shadowVtbl[83] = (void*)draws->draw_primitive_up;
 	if ( draws->draw_indexed_primitive_up ) smoke.shadowVtbl[84] = (void*)draws->draw_indexed_primitive_up;
 	smoke.savedVtbl = vtbl;
 	*(void***)device = smoke.shadowVtbl;
+	++smoke.hits[5];
 }
 
 void CL_Smoke_ParticlesEnd(void)
@@ -556,6 +602,7 @@ void CL_Smoke_ParticlesEnd(void)
 
 int CL_Smoke_FxSpawn(const char *const *effectDef, int time, const float *origin)
 {
+	++smoke.hits[3];
 	if ( !smoke.renderer || !smoke.renderer->fx_spawn || !effectDef || !*effectDef || !origin )
 	{
 		return 0;
@@ -581,6 +628,8 @@ static void CL_Smoke_QueueBullet(int shooter, const float *start, const float *e
 {
 	const char *weaponName = "";
 	int weapon;
+
+	++smoke.hits[4];
 
 	if ( shooter < 0 || shooter >= MAX_GENTITIES || !CL_Smoke_ValidPoint(start) || !CL_Smoke_ValidPoint(end) )
 	{

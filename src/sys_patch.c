@@ -7,6 +7,9 @@
 #include "ui_shared.h"
 #include "sys_patch.h"
 #include "callbacks.h"
+#ifdef COD4X_VOLUMETRIC_SMOKE
+#include "cl_smoke.h"
+#endif
 
 #include <windows.h>
 #include <stdlib.h>
@@ -1077,6 +1080,9 @@ void Patch_Other(){
   Patch_CGWeaponAssets();
   SV_Patches();
   Gfx_PatchRB_ExecuteRendererCommandsLoop();
+#ifdef COD4X_VOLUMETRIC_SMOKE
+  CL_Smoke_Patch();
+#endif
 
 
   SetJump(0x5F3DA2 ,DB_LoadXZoneFromGfxConfig);

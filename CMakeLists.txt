@@ -76,6 +76,16 @@ add_library(cod4x SHARED
     src/fsdword.asm
 )
 
+option(VOLUMETRIC_SMOKE "Build the optional volumetric smoke renderer bridge" OFF)
+set(VOLUMETRIC_SMOKE_RENDERER_SHA256 "" CACHE STRING "Only load a smoke renderer with this SHA-256 (empty: any)")
+if(VOLUMETRIC_SMOKE)
+    target_sources(cod4x PRIVATE src/cl_smoke.c src/cl_smoke_core.c src/cl_smoke_hooks.asm)
+    target_compile_definitions(cod4x PRIVATE COD4X_VOLUMETRIC_SMOKE=1)
+    if(VOLUMETRIC_SMOKE_RENDERER_SHA256)
+        target_compile_definitions(cod4x PRIVATE VSMOKE_RENDERER_SHA256="${VOLUMETRIC_SMOKE_RENDERER_SHA256}")
+    endif()
+endif()
+
 if(OFFICIAL_BUILD)
     add_subdirectory(external/client-auth)
     target_compile_definitions(cod4x PRIVATE OFFICIAL=1)

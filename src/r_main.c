@@ -1,4 +1,7 @@
 #include "q_shared.h"
+#ifdef COD4X_VOLUMETRIC_SMOKE
+#include "cl_smoke.h"
+#endif
 #include "qcommon.h"
 #include "r_shared.h"
 #include "xassets/gfxworld.h"
@@ -191,6 +194,9 @@ void __cdecl R_ShutdownD3D()
     DB_ShutdownXAssets();
   }
   DB_ClearXAssetMem();
+#ifdef COD4X_VOLUMETRIC_SMOKE
+  CL_Smoke_DeviceLost();
+#endif
   sub_60D7D0();
   sub_5F3FD0();
 

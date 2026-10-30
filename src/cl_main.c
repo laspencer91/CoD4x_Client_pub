@@ -17,6 +17,9 @@
 #include "r_shared.h"
 
 #include "tomcrypt/tomcrypt.h"
+#ifdef COD4X_VOLUMETRIC_SMOKE
+#include "cl_smoke.h"
+#endif
 
 #include <stdlib.h>
 #include <string.h>
@@ -1069,6 +1072,9 @@ void CL_InitOnceForAllClients(){
   Cmd_AddCommand("unskippablecinematic", CL_PlayUnskippableCinematic_f);
   Cmd_SetAutoComplete("cinematic", "video", "roq");
   Cmd_AddCommand("logo", CL_PlayLogo_f);
+#ifdef COD4X_VOLUMETRIC_SMOKE
+  CL_Smoke_Init();
+#endif
 	if(!com_demoplayer->boolean)
 	{
   	Cmd_AddCommand("connect", Cmd_Stub_f);
@@ -5470,6 +5476,9 @@ int i;
 	}
 	Com_SteamClientApi_RunFrame( );
 	CL_DiscordFrame( );
+#ifdef COD4X_VOLUMETRIC_SMOKE
+	CL_Smoke_Frame( );
+#endif
 	if(clientUIActives.state < CA_CONNECTED)
 	{
 		Com_SteamClientApi_StopAdvertisingServer( );

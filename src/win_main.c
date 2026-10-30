@@ -1104,6 +1104,13 @@ HMODULE LoadSystemLibraryA(char* libraryname)
 
 wchar_t* Sys_GetAppDataDir(wchar_t *basepath, int size)
 {
+#ifdef COD4X_TEST_ISOLATION
+	/* Test builds: a private folder instead of the user's LocalAppData\CallofDuty4MW. */
+	if ( GetEnvironmentVariableW(L"COD4X_APPDATA_DIR", basepath, size / sizeof(wchar_t)) )
+	{
+		return basepath;
+	}
+#endif
 
 
 
@@ -1177,6 +1184,9 @@ void Sys_RegisterCoD4Protocol( )
 	char iconpath[MAX_STRING_CHARS];
 	const char *exepath = Sys_ExeFile();
 	const char *handler = "URL: CoD4 Connect Handler";
+#ifdef COD4X_TEST_ISOLATION
+	return; /* test builds never register the cod4:// handler */
+#endif
 	len = strlen(exepath);
 
 	if( len < 5)
@@ -1229,6 +1239,9 @@ void Sys_RegisterDemoExt( )
 	char openpath[MAX_STRING_CHARS];
 	char iconpath[MAX_STRING_CHARS];
 	const char *exepath = Sys_ExeFile();
+#ifdef COD4X_TEST_ISOLATION
+	return; /* test builds never register file types */
+#endif
 	len = strlen(exepath);
 	char value[MAX_STRING_CHARS];
 	char typepath[MAX_STRING_CHARS];

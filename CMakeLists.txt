@@ -77,6 +77,10 @@ add_library(cod4x SHARED
 )
 
 option(VOLUMETRIC_SMOKE "Build the optional volumetric smoke renderer bridge" OFF)
+option(TEST_ISOLATION "Test builds only: app data from COD4X_APPDATA_DIR, no Steam, Discord or registry associations" OFF)
+if(TEST_ISOLATION)
+    target_compile_definitions(cod4x PRIVATE COD4X_TEST_ISOLATION=1)
+endif()
 set(VOLUMETRIC_SMOKE_RENDERER_SHA256 "" CACHE STRING "Only load a smoke renderer with this SHA-256 (empty: any)")
 if(VOLUMETRIC_SMOKE)
     target_sources(cod4x PRIVATE src/cl_smoke.c src/cl_smoke_core.c src/cl_smoke_hooks.asm)

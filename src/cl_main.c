@@ -390,6 +390,9 @@ qboolean CL_LoadSteamApi()
   qboolean success;
   int clancount;
   wchar_t binpath[1024];
+#ifdef COD4X_TEST_ISOLATION
+  return qfalse; /* test builds stay off the user's Steam client */
+#endif
 
   cvar_t* steamoverlay = Cvar_RegisterBool("steamoverlay", qfalse, CVAR_ARCHIVE, "Loading the SteamOverlay on gamestart? Not recommended.");
 
@@ -722,6 +725,9 @@ void CL_DiscordReportIdle()
 
 void CL_LoadDiscordApi()
 {
+#ifdef COD4X_TEST_ISOLATION
+	return; /* test builds stay off the user's Discord */
+#endif
 
 	DiscordEventHandlers handlers;
 	memset(&handlers, 0, sizeof(handlers));

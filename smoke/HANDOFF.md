@@ -287,8 +287,9 @@ Not verified: anything at runtime. No game client or server was started for this
   player's misses do.
 - The distortion (heat haze) pass is seen only as a "pending" flag; the prototype's extra
   seams for distortion technique tagging and copy timing are not part of ABI version 1.
-- Float-Z scene depth is requested for every 3D view while smoke is active; a mod that sets
-  `r_zFeather 0` may still leave depth unavailable (the renderer then keeps stock smoke).
+- Float-Z scene depth is requested for every 3D view while smoke is active. The float-Z pass
+  also needs `r_zFeather 1`: the bridge turns it on while a smoke-enabled map is active and
+  restores the player's value afterwards (prints `r_zFeather enabled for volumetric smoke`).
 - The device is created with `Direct3DCreate9` (not Ex) by the public client; a renderer
   using `D3DPOOL_MANAGED` would need changes for a 9Ex device.
 - One renderer DLL per client build; the SHA-256 pin is optional.

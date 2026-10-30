@@ -110,6 +110,7 @@ static struct
 	int enabled;
 	qboolean settingsSent;
 	qboolean deviceLive;
+	qboolean featherForced;
 	void *shadowVtbl[VSMOKE_DEVICE_METHODS];
 	void **savedVtbl;
 	vsmoke_draw_table_t nativeDraws;
@@ -374,6 +375,29 @@ static void CL_Smoke_UpdateSettings(void)
 	}
 }
 
+/* The float-Z pass only runs with r_zFeather on. While a smoke-enabled map is active the
+   bridge turns it on and restores the player's value afterwards. */
+static void CL_Smoke_RequireDepthFeather(qboolean required)
+{
+	cvar_t *feather = Cvar_FindVar("r_zFeather");
+
+	if ( !feather )
+	{
+		return;
+	}
+	if ( required && !smoke.featherForced && !feather->boolean )
+	{
+		smoke.featherForced = qtrue;
+		Cvar_SetBool(feather, qtrue);
+		Com_Printf(CON_CHANNEL_GFX, "^3Smoke:^7 r_zFeather enabled for volumetric smoke\n");
+	}
+	else if ( !required && smoke.featherForced )
+	{
+		smoke.featherForced = qfalse;
+		Cvar_SetBool(feather, qfalse);
+	}
+}
+
 void CL_Smoke_Frame(void)
 {
 	char line[512];
@@ -387,6 +411,7 @@ void CL_Smoke_Frame(void)
 	CL_Smoke_BindMap();
 	cl_smoke_sceneDepth = smoke.enabled && smoke.policy[0] && smoke.boundMap[0]
 		&& smoke.renderer->wants_scene_depth && smoke.renderer->wants_scene_depth();
+	CL_Smoke_RequireDepthFeather(cl_smoke_sceneDepth);
 	if ( smoke.renderer->pop_console )
 	{
 		for ( i = 0; i < 8 && smoke.renderer->pop_console(line, sizeof(line)) > 0; ++i )

@@ -20,8 +20,15 @@ The renderer uses those tags to protect smoke against distortion draws. This is
 an incompatible interface change: update both DLLs together. October 30 runtime
 results describe the earlier v1 build; v2 GPU/API checks now pass, while player-level
 visual acceptance remains pending (see the November 1 runtime-results entry).
-The latest official client release and fetched upstream master remain 21.8 at
-`17182c7`; no newer upstream commits needed integrating on November 1.
+The legacy `callofduty4x/CoD4x_Client_pub` release and fetched upstream master
+remain 21.8 at `17182c7`. This is not the CODTV client at
+https://cod4x.codtv.eu/client, which lists 1.0.1 on November 1 (125 Hz/capsule
+hitboxes were introduced in 1.0.0). The smoke candidate is built on legacy
+21.8, not CODTV. Integration into CODTV remains outstanding; do not describe
+the 21.8 upstream check as proving CODTV is current or smoke-compatible.
+The public `warkingous/cod4x-codtv` repository inspected is documentation;
+a buildable native CODTV source checkout or supported extension path has not
+yet been established. No CODTV client/server binary was replaced by this work.
 
 Stock CoD4 smoke is a cloud of camera-facing sprites. Every client draws them from its own
 camera, so the visible edge, the thin spots and what a sprite hides differ between the

@@ -65,7 +65,7 @@ static const vsmoke_renderer_t stub =
 	sizeof(vsmoke_renderer_t), VSMOKE_API_VERSION, 0, "stub", "0",
 	Stub_Init, NULL, Stub_SetMap, Stub_SetSettings, NULL, Stub_Status,
 	Stub_FxSpawn, Stub_Bullet,
-	NULL, NULL, NULL, NULL, Stub_Composite, NULL
+	NULL, NULL, NULL, NULL, Stub_Composite, NULL, NULL
 };
 
 #ifndef STUB_NO_EXPORT

@@ -7,8 +7,14 @@ client side only: a small loader, a handful of engine hook points, two client cv
 command and the binary interface the renderer implements.
 
 **Status: custom build, not released.** Nothing built from this branch is meant for players
-until the project owner decides so. It has been built and unit tested; it has not yet been run
-in a game (see "Remaining work").
+until the project owner decides so. The October 30 build passed initial in-game tests
+(see `runtime-tests/RESULTS.md`). The November 1 API v2 candidate adds smoke-aware
+heat-haze technique routing. Its GPU/API checks and connected ProMod depth-setting
+check pass; player-level visual acceptance remains pending.
+
+With the corresponding ProMod update, a server publishing `sv_volumetricSmoke "v1"`
+allows the renderer to manage `r_zFeather`. ProMod still forces it off without that
+policy. Set policy before loading the map. This does not relax other graphics rules.
 
 ## What is in this branch
 
@@ -87,6 +93,11 @@ filesystem (loose file or any IWD, including usermaps). See `HANDOFF.md`.
 
 ## Remaining work
 
-Runtime validation in a game (hook sites under CoD4x, renderer built against this ABI, device
-reset, map change, pure servers, two clients agreeing), the renderer's API v1 build, a stock-map
-grid pack, and the server-side cvar registration. See `HANDOFF.md`.
+The API v2 bridge and renderer must be updated together; v1 pairings are rejected.
+The two material-technique seams select the existing smoke-aware haze shaders during
+the particle pass. Smoke preparation already runs before the native distortion scene
+copy, so that copy contains smoke. Only technique flags cross the ABI.
+
+Remaining validation includes the player-level visual check, real thrown grenades across
+two clients, pure servers, killcams/demos and fullscreen device reset. Initial v1
+runtime evidence and its limits are in `runtime-tests/RESULTS.md`.

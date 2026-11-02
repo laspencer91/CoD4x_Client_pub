@@ -13,6 +13,16 @@ without the project owner's decision.
 
 ## 1. What it does and why it is fairer
 
+November 1 follow-up: the working interface is now API v2. The host validates and
+hooks technique selection at `0x648E9E` and `0x64902C`, replays each original
+load/test, and relays only the technique flags through `material_technique`.
+The renderer uses those tags to protect smoke against distortion draws. This is
+an incompatible interface change: update both DLLs together. October 30 runtime
+results describe the earlier v1 build; v2 GPU/API checks now pass, while player-level
+visual acceptance remains pending (see the November 1 runtime-results entry).
+The latest official client release and fetched upstream master remain 21.8 at
+`17182c7`; no newer upstream commits needed integrating on November 1.
+
 Stock CoD4 smoke is a cloud of camera-facing sprites. Every client draws them from its own
 camera, so the visible edge, the thin spots and what a sprite hides differ between the
 thrower, the defender and a spectator, and depend on graphics settings.

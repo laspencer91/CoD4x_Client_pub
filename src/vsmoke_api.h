@@ -1,5 +1,5 @@
 /*
- * Volumetric smoke renderer interface (binary ABI, version 1).
+ * Volumetric smoke renderer interface (binary ABI, version 2).
  *
  * The client does not contain the smoke renderer. It loads an optional, separately
  * built renderer DLL (vsmoke.dll) and talks to it only through the plain C structures
@@ -27,11 +27,12 @@
 extern "C" {
 #endif
 
-#define VSMOKE_API_VERSION 1
+#define VSMOKE_API_VERSION 2
 #define VSMOKE_EXPORT_NAME "VSmoke_GetRenderer"
 
 /* Renderer capability flags (vsmoke_renderer_t.flags). */
 #define VSMOKE_WANTS_PARTICLE_DRAWS 0x1 /* supply particle_draws; see particles_begin */
+#define VSMOKE_WANTS_HAZE_TECHNIQUES 0x2 /* supply material_technique during particle draws */
 
 /* One view as the engine renders it (copied from the engine's GfxViewInfo). */
 typedef struct vsmoke_view_s
@@ -149,6 +150,9 @@ typedef struct vsmoke_renderer_s
 	void (__cdecl *composite)(const vsmoke_frame_t *frame, const vsmoke_view_t *view);   /* after the 3D scene */
 	/* the device is about to be reset or destroyed: release every D3DPOOL_DEFAULT resource */
 	void (__cdecl *device_lost)(void);
+	/* render thread: selected material technique's flags; bit 0 means distortion.
+	   Required with VSMOKE_WANTS_HAZE_TECHNIQUES. No engine pointer crosses the ABI. */
+	void (__cdecl *material_technique)(uint32_t flags);
 } vsmoke_renderer_t;
 
 typedef const vsmoke_renderer_t *(__cdecl *vsmoke_get_renderer_t)(uint32_t api_version);

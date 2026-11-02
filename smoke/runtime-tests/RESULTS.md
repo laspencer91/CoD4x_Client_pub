@@ -1,5 +1,36 @@
 # Runtime test results, 2026-10-30
 
+## November 1 API v2 candidate
+
+The smoke-enabled isolated client rebuild passes; 70 bridge/loader/ABI checks
+and 131,072 executions of the shipped NASM technique stubs pass. The latter
+exercise both sites with every 16-bit flag value, checking callback tags, native
+load/test results, registers and SSE restoration. Shader generation and the
+v2 renderer build pass. API v1 mismatches are rejected by the new interface.
+
+The corresponding ProMod package links without errors or warnings. Isolated
+CoD4x 21.2 dedicated servers load Crash/S&D with both `v1` and empty smoke policies
+without script compile/runtime errors. Evidence is under
+`promod-econ-na/build/smoke-depth-v2/`; client checks under `build-fix/`.
+
+After the owner closed the other CoD4 client, the GPU fixture passed: 36 baked
+programs, 24 SM2/SM3 stock vertex pairs, clear-air equivalence, opaque/edge/depth
+protection, state restoration, failure/off paths, transmission multiplication,
+resize and real D3D9 Reset/recreation. The v2 DLL API fixture passed 30 checks,
+including rejecting API v1, real cloud rendering/carving and suppressing an
+unsupported distortion draw while smoke is visible. Logs:
+`vsmoke-renderer/build/vsmoke/{haze-gpu-final,api2-test}.log`.
+
+A connected ProMod client reports `promod_smokeDepth=1`, `r_zFeather=1` and
+`r_distortion=1`. Its grid/policy/GPU are ready and it creates the haze matte
+(1,635 frames in this run). The first fixture lacked executable-local mod files
+and the existing UI archive; those were staged before the successful retry.
+Evidence: `build-fix/compatibility-kit/reports/smoke-report-DADS-PC-20261101-185536.txt`.
+The run stayed in spectator mode: no visible haze/smoke overlap was exercised
+in-game (`wrapped=0`). This is integration evidence, not player-level visual
+acceptance, full-match validation or an FPS comparison. No live PromodFlex/CODTV
+installation or public release was updated. October 30 results below describe v1.
+
 First runs of the bridge inside a game. All processes ran from a private copy of the game files,
 bound to 127.0.0.1 / ::1 on ports 28970-28978, and were stopped by their own process ids. Clients
 were `TEST_ISOLATION` builds (app data from `COD4X_APPDATA_DIR`, no Steam, Discord or registry

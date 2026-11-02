@@ -232,6 +232,11 @@ int VSmoke_ValidateRenderer(const vsmoke_renderer_t *renderer, char *reason, siz
 	{
 		problem = "renderer asks for particle draws without particles_begin/end";
 	}
+	else if ( (renderer->flags & VSMOKE_WANTS_HAZE_TECHNIQUES) &&
+		(!(renderer->flags & VSMOKE_WANTS_PARTICLE_DRAWS) || !renderer->material_technique) )
+	{
+		problem = "renderer asks for haze techniques without particle draws or material_technique";
+	}
 	if ( problem && reason && reasonSize )
 	{
 		snprintf(reason, reasonSize, "%s", problem);

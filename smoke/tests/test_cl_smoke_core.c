@@ -71,6 +71,8 @@ static void TestResolution(void)
 static int __cdecl Init(const vsmoke_host_t *host) { (void)host; return 1; }
 static void __cdecl SetMap(const vsmoke_map_t *map) { (void)map; }
 static const vsmoke_draw_table_t *__cdecl Begin(const vsmoke_frame_t *f, const vsmoke_view_t *v) { (void)f; (void)v; return NULL; }
+static void __cdecl End(void) {}
+static void __cdecl Technique(uint32_t flags) { (void)flags; }
 
 static void TestValidate(void)
 {
@@ -96,6 +98,15 @@ static void TestValidate(void)
 	CHECK(!VSmoke_ValidateRenderer(&renderer, reason, sizeof(reason)));
 	renderer.particles_begin = Begin;
 	CHECK(!VSmoke_ValidateRenderer(&renderer, reason, sizeof(reason)));
+	renderer.particles_end = End;
+	renderer.flags |= VSMOKE_WANTS_HAZE_TECHNIQUES;
+	CHECK(!VSmoke_ValidateRenderer(&renderer, reason, sizeof(reason)) && strstr(reason, "haze"));
+	renderer.material_technique = Technique;
+	CHECK(VSmoke_ValidateRenderer(&renderer, reason, sizeof(reason)));
+	renderer.flags = VSMOKE_WANTS_HAZE_TECHNIQUES;
+	CHECK(!VSmoke_ValidateRenderer(&renderer, reason, sizeof(reason)));
+	renderer.api_version = 1;
+	CHECK(!VSmoke_ValidateRenderer(&renderer, reason, sizeof(reason)) && strstr(reason, "version"));
 	CHECK(!VSmoke_ValidateRenderer(NULL, reason, sizeof(reason)));
 }
 
@@ -184,7 +195,7 @@ static void TestLayout(void)
 	CHECK(sizeof(vsmoke_frame_t) == 36);
 	CHECK(sizeof(vsmoke_map_t) == 44);
 	CHECK(sizeof(vsmoke_host_t) == 28);
-	CHECK(sizeof(vsmoke_renderer_t) == 76);
+	CHECK(sizeof(vsmoke_renderer_t) == 80);
 	CHECK(offsetof(vsmoke_renderer_t, init) == 20);
 	CHECK(offsetof(vsmoke_renderer_t, device_lost) == 72);
 }

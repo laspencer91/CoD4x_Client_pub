@@ -42,6 +42,8 @@
 #define ADDR_BULLET_TRACE           0x4558E0
 #define ADDR_RESET_RELEASE_CALL     0x5F5278
 #define ADDR_RESET_RELEASE          0x5F3FD0
+#define ADDR_TECHNIQUE              0x648E9E
+#define ADDR_TECHNIQUE_ALT          0x64902C
 
 /* GfxViewInfo as far as the renderer needs it. */
 typedef struct
@@ -94,6 +96,8 @@ void VSmoke_Stub_SceneDepth(void);
 void VSmoke_Stub_WorldBullet(void);
 void VSmoke_Stub_FleshBullet(void);
 void VSmoke_Stub_SimulatedTrace(void);
+void VSmoke_Stub_Technique(void);
+void VSmoke_Stub_TechniqueAlt(void);
 void sub_5F3FD0(void);
 
 static struct
@@ -149,6 +153,8 @@ static qboolean CL_Smoke_SitesUnchanged(void)
 	{
 		{ ADDR_FX_SPAWN, { 0x83, 0xEC, 0x10, 0x53, 0x8B, 0x5C, 0x24, 0x18 }, 8 },
 		{ ADDR_FLOATZ_REQUEST, { 0x88, 0x93, 0xA8, 0x13, 0x00, 0x00 }, 6 },
+		{ ADDR_TECHNIQUE, { 0x0F, 0xB7, 0x41, 0x04, 0xA8, 0x01 }, 6 },
+		{ ADDR_TECHNIQUE_ALT, { 0x0F, 0xB7, 0x41, 0x04, 0xA8, 0x01 }, 6 },
 	};
 	static const DWORD calls[][2] =
 	{
@@ -216,6 +222,10 @@ void CL_Smoke_Patch(void)
 	SetCall(ADDR_SIM_TRACE_CALL_1, VSmoke_Stub_SimulatedTrace);
 	SetCall(ADDR_SIM_TRACE_CALL_2, VSmoke_Stub_SimulatedTrace);
 	SetCall(ADDR_RESET_RELEASE_CALL, CL_Smoke_ReleaseForReset);
+	SetJump(ADDR_TECHNIQUE, VSmoke_Stub_Technique);
+	*(byte*)(ADDR_TECHNIQUE + 5) = NOP;
+	SetJump(ADDR_TECHNIQUE_ALT, VSmoke_Stub_TechniqueAlt);
+	*(byte*)(ADDR_TECHNIQUE_ALT + 5) = NOP;
 	smoke.hooked = qtrue;
 }
 
@@ -390,7 +400,7 @@ static void CL_Smoke_RequireDepthFeather(qboolean required)
 	{
 		return;
 	}
-	if ( required && !smoke.featherForced && !feather->boolean )
+	if ( required && !feather->boolean )
 	{
 		smoke.featherForced = qtrue;
 		Cvar_SetBool(feather, qtrue);
@@ -512,6 +522,14 @@ void CL_Smoke_Prepare(const vsmokeViewInfo_t *info)
 	if ( smoke.renderer && smoke.renderer->prepare && CL_Smoke_BuildFrame(info, &frame, &view) )
 	{
 		smoke.renderer->prepare(&frame, &view);
+	}
+}
+
+void CL_Smoke_Technique(const MaterialTechnique *technique)
+{
+	if ( smoke.renderer && (smoke.renderer->flags & VSMOKE_WANTS_HAZE_TECHNIQUES) )
+	{
+		smoke.renderer->material_technique(technique ? technique->flags : 0);
 	}
 }
 

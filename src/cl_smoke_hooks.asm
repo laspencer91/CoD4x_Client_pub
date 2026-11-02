@@ -28,6 +28,14 @@ SECTION .rodata
 	oFloatZContinue      dd 0x5F9C24
 	oTracerDecision      dd 0x458720
 	oBulletTrace         dd 0x4558E0
+%ifdef SMOKE_HOOK_TEST
+extern Smoke_TestReturn
+	oTechniqueContinue   dd Smoke_TestReturn
+	oTechniqueAltContinue dd Smoke_TestReturn
+%else
+	oTechniqueContinue   dd 0x648EA4
+	oTechniqueAltContinue dd 0x649032
+%endif
 
 SECTION .text
 
@@ -39,6 +47,30 @@ extern CL_Smoke_FxSpawn
 extern CL_Smoke_WorldBullet
 extern CL_Smoke_SimulatedBullet
 extern cl_smoke_sceneDepth
+extern CL_Smoke_Technique
+
+; These sites select a material technique. Replay the original load/test after the callback.
+global VSmoke_Stub_Technique
+VSmoke_Stub_Technique:
+	SMOKE_SAVE
+	push dword [ebp + 24]
+	call CL_Smoke_Technique
+	add esp, 4
+	SMOKE_RESTORE
+	movzx eax, word [ecx + 4]
+	test al, 1
+	jmp dword [oTechniqueContinue]
+
+global VSmoke_Stub_TechniqueAlt
+VSmoke_Stub_TechniqueAlt:
+	SMOKE_SAVE
+	push dword [ebp + 24]
+	call CL_Smoke_Technique
+	add esp, 4
+	SMOKE_RESTORE
+	movzx eax, word [ecx + 4]
+	test al, 1
+	jmp dword [oTechniqueAltContinue]
 
 ; call 0x64ACD0 at 0x64AD70 (3D scene drawn; ESI = GfxViewInfo*)
 global VSmoke_Stub_Composite

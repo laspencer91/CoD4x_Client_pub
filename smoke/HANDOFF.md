@@ -98,6 +98,39 @@ gap minus 5 ms, excluding network transit. That means roughly 55 ms of lookback
 with 50 ms snapshots and 15 ms with 10 ms snapshots. This is interpolation delay,
 not forward prediction. Do not apply the earlier CoD2 lookahead assumption here.
 
+## Parked: mouse rotation investigation (November 4)
+
+Private tests: client base `ecd7954`, local Promod/Crash, 250 FPS cap,
+165 Hz desktop. User reports longstanding choppy mouse turning across mice;
+walking and keyboard turning are smooth. Raw-input toggle did not help.
+
+- Fixed deltas through the native mouse accumulator once per command: smooth.
+  Captures showed no extra camera hold when input yaw changed.
+- Windows `SendInput` produced accepted raw-input reports. At matched target
+  speed, 125 updates/sec was choppy; requested 1000 (roughly 950 actual sends/sec)
+  was smooth. Injection bypasses physical hardware/connection and some drivers.
+- Cursor-maintenance batching did not help; `m_filter 1` helped little, if at all.
+
+Conclusion: input cadence is implicated; **Windows versus device/driver/client
+handling remains unresolved**. Observed physical mouse: MX Master 3S/Bluetooth.
+Background-listener readings around 7.5 ms cannot establish hardware polling
+rate because Windows can throttle/coalesce background delivery.
+
+Next:
+1. Timestamp physical reports inside foreground CoD4, including device ID,
+   buffered reads, handler cost and command/camera consumption on one QPC clock.
+   Entry points: `IN_RawEvent`/`IN_RawInputDrainQueue`, `Sys_EventLoop`,
+   `CL_MouseEvent`/`CL_FinishMove`.
+2. Compare a known 1000 Hz physical mouse with injected input at matched settings;
+   separate arrival gaps from client consumption delays.
+3. Investigate CODTV's raw-input/high-polling work and test compatibility/DPI
+   settings individually. Its screenshots suggested disabling fullscreen
+   optimizations and setting high-DPI override to Application; neither was
+   applied or verified here.
+
+All experimental code, test processes, builds and captures were removed.
+Evidence is session observations; no trace files were retained.
+
 ## Smoke bridge contract
 
 `src/cl_smoke.c` owns engine hooks and lifecycle; `cl_smoke_core.c` owns engine-free

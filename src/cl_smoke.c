@@ -284,7 +284,7 @@ static void CL_Smoke_Status_f(void)
 	Com_Printf(CON_CHANNEL_DONT_FILTER, "Volumetric smoke: hooks composite=%u prepare=%u particles=%u effects=%u bullets=%u routed=%u\n",
 		smoke.hits[0], smoke.hits[1], smoke.hits[2], smoke.hits[3], smoke.hits[4], smoke.hits[5]);
 	Com_Printf(CON_CHANNEL_DONT_FILTER, "Volumetric smoke: quality %s (r_volumetricSmokeQuality full|half|quarter)\n",
-		smokeQualityNames[r_volumetricSmokeQuality->integer >= 0 && r_volumetricSmokeQuality->integer < 3 ? r_volumetricSmokeQuality->integer : 1]);
+		smokeQualityNames[r_volumetricSmokeQuality->integer >= 0 && r_volumetricSmokeQuality->integer < 3 ? r_volumetricSmokeQuality->integer : 2]);
 }
 
 void CL_Smoke_Init(void)
@@ -302,8 +302,8 @@ void CL_Smoke_Init(void)
 	cl_smoke_sceneDepth = qfalse;
 	r_volumetricSmoke = Cvar_RegisterBool("r_volumetricSmoke", qtrue, CVAR_ARCHIVE,
 		"Use the volumetric smoke renderer on servers that enable it");
-	r_volumetricSmokeQuality = Cvar_RegisterEnum("r_volumetricSmokeQuality", smokeQualityNames, 1, CVAR_ARCHIVE,
-		"Volumetric smoke render resolution: full, half or quarter");
+	r_volumetricSmokeQuality = Cvar_RegisterEnum("r_volumetricSmokeQuality", smokeQualityNames, 2, CVAR_ARCHIVE,
+		"Volumetric smoke render resolution: quarter by default; half/full are manual overrides");
 	Cmd_AddCommand("volumetricsmoke_status", CL_Smoke_Status_f);
 
 	if ( !smoke.hooked || smoke.renderer )

@@ -128,7 +128,7 @@ int VSmoke_UpdateMapBinding(vsmoke_map_binding_t *binding, int active, const cha
 
 int VSmoke_ResolutionDivisor(int index)
 {
-	return index == 0 ? 1 : index == 2 ? 4 : 2;
+	return index == 0 ? 1 : index == 1 ? 2 : 4;
 }
 
 int VSmoke_RendererDirectory(HMODULE module, wchar_t *directory, size_t directoryCount)

@@ -1,5 +1,11 @@
 # CoD4x 100 Hz and volumetric smoke
 
+## Quarter-resolution default, November 4 follow-up
+
+Quarter resolution is the default. Half and full require an explicit
+`r_volumetricSmokeQuality half` or `r_volumetricSmokeQuality full` selection,
+which remains archived. Invalid bridge selections fall back to quarter.
+
 ## Disk config execution, November 4 follow-up
 
 Disk configs now release their filesystem temporary buffer before executing commands.

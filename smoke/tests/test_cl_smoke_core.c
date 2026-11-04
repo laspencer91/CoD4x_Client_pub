@@ -86,7 +86,8 @@ static void TestResolution(void)
 	CHECK(VSmoke_ResolutionDivisor(0) == 1);
 	CHECK(VSmoke_ResolutionDivisor(1) == 2);
 	CHECK(VSmoke_ResolutionDivisor(2) == 4);
-	CHECK(VSmoke_ResolutionDivisor(7) == 2);
+	CHECK(VSmoke_ResolutionDivisor(7) == 4);
+	CHECK(VSmoke_ResolutionDivisor(-1) == 4);
 }
 
 static int __cdecl Init(const vsmoke_host_t *host) { (void)host; return 1; }

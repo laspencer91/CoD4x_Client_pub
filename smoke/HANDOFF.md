@@ -1,5 +1,17 @@
 # CoD4x 100 Hz and volumetric smoke
 
+## Disk config execution, November 4 follow-up
+
+Disk configs now release their filesystem temporary buffer before executing commands.
+Previously, `exec` of a config containing `devmap` could reset that buffer's hunk during
+execution and then fail with `Hunk_FreeTempMemory: bad magic`. The commands now execute
+from a heap copy. `python tests/test_cmd_exec.py --cc <gcc>` compiles the actual function
+against a map-resetting allocator and checks ownership, empty/missing files and allocation
+failure. The regression fails against the previous function and passes after this change.
+Native local startup through a disk config containing `devmap mp_crash` also completes;
+the client receives the local `v1` smoke policy and enables scene depth. This does not
+establish remote-server gameplay or repeated map-reload acceptance.
+
 Maintainer context, updated November 4, 2026. The paired client, server and
 PromodFlex changes are ready for a controlled private playtest. They have not
 been deployed to public servers. An intermittent reconnect failure under severe

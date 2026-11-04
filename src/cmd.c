@@ -447,17 +447,35 @@ qboolean Com_IsConfigMp(const char* filename)
 
 qboolean Cmd_ExecFile(char *qpath)
 {
-  char *buf;
+  char *buf = NULL;
+  char *commands;
+  int length;
 
-  FS_ReadFile(qpath, (void **)&buf);
-  if ( buf )
+  length = FS_ReadFile(qpath, (void **)&buf);
+  if ( !buf )
   {
-    Com_Printf(CON_CHANNEL_SYSTEM, "execing %s from disk\n", qpath);
-    Cbuf_ExecuteBuffer(0, 0, buf);
-    FS_FreeFile(buf);
-    return 1;
+    return 0;
   }
-  return 0;
+  if ( length < 0 )
+  {
+    FS_FreeFile(buf);
+    return 0;
+  }
+  commands = malloc((size_t)length + 1);
+  if ( !commands )
+  {
+    FS_FreeFile(buf);
+    Com_PrintError(CON_CHANNEL_SYSTEM, "couldn't allocate commands for %s\n", qpath);
+    return 0;
+  }
+  memcpy(commands, buf, length);
+  commands[length] = '\0';
+  // A config can load a map, which discards the filesystem's temporary hunk buffer.
+  FS_FreeFile(buf);
+  Com_Printf(CON_CHANNEL_SYSTEM, "execing %s from disk\n", qpath);
+  Cbuf_ExecuteBuffer(0, 0, commands);
+  free(commands);
+  return 1;
 }
 
 qboolean Cmd_ExecUserdir(char *qpath)

@@ -109,7 +109,7 @@ static struct
 	const vsmoke_renderer_t *renderer;
 	vsmoke_host_t host;
 	char failure[256];
-	char boundMap[MAX_QPATH];
+	vsmoke_map_binding_t mapBinding;
 	char policy[VSMOKE_POLICY_MAX];
 	int resolution;
 	int enabled;
@@ -124,6 +124,7 @@ static struct
 } smoke;
 
 static cvar_t *r_volumetricSmoke;
+static cvar_t *cl_volumetricSmokeDepth;
 static cvar_t *r_volumetricSmokeQuality;
 static const char *smokeQualityNames[] = { "full", "half", "quarter", NULL };
 
@@ -258,6 +259,8 @@ static void CL_Smoke_Status_f(void)
 {
 	char text[1024];
 
+	Com_Printf(CON_CHANNEL_DONT_FILTER, "Volumetric smoke: depth_permission=%d\n",
+		cl_volumetricSmokeDepth->boolean);
 	if ( !smoke.hooked )
 	{
 		Com_Printf(CON_CHANNEL_DONT_FILTER, "Volumetric smoke: off (%s)\n",
@@ -292,6 +295,11 @@ void CL_Smoke_Init(void)
 	const char *pinned = NULL;
 #endif
 
+	cl_volumetricSmokeDepth = Cvar_RegisterBool("cl_volumetricSmokeDepth", qfalse, CVAR_ROM,
+		"The active volumetric smoke renderer requires scene depth");
+	/* Discard a pre-registration +set/config value; only the bridge grants this. */
+	Cvar_SetBool(cl_volumetricSmokeDepth, qfalse);
+	cl_smoke_sceneDepth = qfalse;
 	r_volumetricSmoke = Cvar_RegisterBool("r_volumetricSmoke", qtrue, CVAR_ARCHIVE,
 		"Use the volumetric smoke renderer on servers that enable it");
 	r_volumetricSmokeQuality = Cvar_RegisterEnum("r_volumetricSmokeQuality", smokeQualityNames, 1, CVAR_ARCHIVE,
@@ -339,20 +347,16 @@ static void CL_Smoke_BindMap(void)
 	char gridPath[MAX_QPATH];
 	const char *bspName = cgs.mapname;
 
-	if ( clientUIActives.state != CA_ACTIVE || !rgp.world || !bspName[0] )
+	/* A fast restart keeps the BSP and live clock, but toggles this accepted
+	 * snapshot bit. Rebinding sends a new API map serial and clears old clouds. */
+	int action = VSmoke_UpdateMapBinding(&smoke.mapBinding,
+		clientUIActives.state == CA_ACTIVE && rgp.world && cl.snap.valid,
+		bspName, (unsigned int)cl.snap.snapFlags & SNAPFLAG_SERVERCOUNT);
+	if ( action <= 0 )
 	{
-		if ( smoke.boundMap[0] )
-		{
-			smoke.boundMap[0] = '\0';
-			smoke.renderer->set_map(NULL);
-		}
+		if ( action < 0 ) smoke.renderer->set_map(NULL);
 		return;
 	}
-	if ( !Q_stricmp(smoke.boundMap, bspName) )
-	{
-		return;
-	}
-	Q_strncpyz(smoke.boundMap, bspName, sizeof(smoke.boundMap));
 	memset(&map, 0, sizeof(map));
 	map.size = sizeof(map);
 	map.bsp_name = bspName;
@@ -418,15 +422,22 @@ void CL_Smoke_Frame(void)
 	char line[512];
 	int i;
 
+	if ( smoke.renderer )
+	{
+		CL_Smoke_UpdateSettings();
+		CL_Smoke_BindMap();
+	}
+	cl_smoke_sceneDepth = smoke.renderer && smoke.enabled && smoke.policy[0] && smoke.mapBinding.name[0]
+		&& smoke.renderer->wants_scene_depth && smoke.renderer->wants_scene_depth();
+	if ( cl_volumetricSmokeDepth->boolean != cl_smoke_sceneDepth )
+	{
+		Cvar_SetBool(cl_volumetricSmokeDepth, cl_smoke_sceneDepth);
+	}
+	CL_Smoke_RequireDepthFeather(cl_smoke_sceneDepth);
 	if ( !smoke.renderer )
 	{
 		return;
 	}
-	CL_Smoke_UpdateSettings();
-	CL_Smoke_BindMap();
-	cl_smoke_sceneDepth = smoke.enabled && smoke.policy[0] && smoke.boundMap[0]
-		&& smoke.renderer->wants_scene_depth && smoke.renderer->wants_scene_depth();
-	CL_Smoke_RequireDepthFeather(cl_smoke_sceneDepth);
 	if ( smoke.renderer->pop_console )
 	{
 		for ( i = 0; i < 8 && smoke.renderer->pop_console(line, sizeof(line)) > 0; ++i )

@@ -5,6 +5,8 @@
 
 A [CoD4x Server](https://github.com/callofduty4x/CoD4x_Server)-compatible client.
 
+Custom 100 Hz and volumetric smoke feature context: [maintainer handoff](smoke/HANDOFF.md).
+
 This client version isn't compatible with CoD4x servers that require client authentication, however, it is compatible with servers that have client authentication disabled (`sv_noauth 1`).
 
 Modifications of this client **may** end up in the official release, so merge requests are very welcome.

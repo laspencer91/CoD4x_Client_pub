@@ -25,6 +25,18 @@ int VSmoke_SelectPolicy(const char *systeminfo, const char *serverinfo, char *po
 /* "maps/mp/<name>.d3dbsp" -> "maps/mp/<name>.smokegrid". Returns 0 for anything else. */
 int VSmoke_GridPath(const char *bspName, char *path, size_t pathSize);
 
+/* Map identity includes the accepted snapshot's restart epoch. The server toggles
+   it for same-map fast restarts even when game time keeps moving forward. */
+typedef struct
+{
+	char name[64];
+	unsigned int epoch;
+} vsmoke_map_binding_t;
+
+/* Update binding: 1 bind/rebind, -1 unbind, 0 unchanged. Inactive/invalid snapshots
+   unbind once. Only the caller's masked restart bit belongs in epoch. */
+int VSmoke_UpdateMapBinding(vsmoke_map_binding_t *binding, int active, const char *name, unsigned int epoch);
+
 /* Quality enum index (0 full, 1 half, 2 quarter) -> render divisor (1, 2, 4). */
 int VSmoke_ResolutionDivisor(int index);
 

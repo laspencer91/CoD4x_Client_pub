@@ -112,6 +112,20 @@ int VSmoke_GridPath(const char *bspName, char *path, size_t pathSize)
 	return 1;
 }
 
+int VSmoke_UpdateMapBinding(vsmoke_map_binding_t *binding, int active, const char *name, unsigned int epoch)
+{
+	if ( !active || !name || !name[0] || strlen(name) >= sizeof(binding->name) )
+	{
+		if ( !binding->name[0] ) return 0;
+		binding->name[0] = '\0';
+		return -1;
+	}
+	if ( !_stricmp(binding->name, name) && binding->epoch == epoch ) return 0;
+	strcpy(binding->name, name);
+	binding->epoch = epoch;
+	return 1;
+}
+
 int VSmoke_ResolutionDivisor(int index)
 {
 	return index == 0 ? 1 : index == 2 ? 4 : 2;

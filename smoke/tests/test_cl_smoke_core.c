@@ -60,6 +60,27 @@ static void TestGridPath(void)
 	CHECK(!VSmoke_GridPath(NULL, path, sizeof(path)));
 }
 
+static void TestMapLifecycle(void)
+{
+	vsmoke_map_binding_t binding = {{0}, 0};
+	const char *map = "maps/mp/mp_crash.d3dbsp";
+	CHECK(!VSmoke_UpdateMapBinding(&binding, 0, map, 0));
+	CHECK(VSmoke_UpdateMapBinding(&binding, 1, map, 0) == 1);
+	CHECK(!VSmoke_UpdateMapBinding(&binding, 1, map, 0));
+	/* Same BSP, continuous time: both restart-bit edges must discard old clouds. */
+	CHECK(VSmoke_UpdateMapBinding(&binding, 1, map, 4) == 1);
+	CHECK(!VSmoke_UpdateMapBinding(&binding, 1, map, 4));
+	CHECK(VSmoke_UpdateMapBinding(&binding, 1, map, 0) == 1);
+	CHECK(VSmoke_UpdateMapBinding(&binding, 1, "maps/mp/MP_CRASH.d3dbsp", 0) == 0);
+	CHECK(VSmoke_UpdateMapBinding(&binding, 1, "maps/mp/mp_backlot.d3dbsp", 0) == 1);
+	CHECK(VSmoke_UpdateMapBinding(&binding, 0, map, 0) == -1);
+	CHECK(!VSmoke_UpdateMapBinding(&binding, 0, map, 0));
+	/* Reconnect to the same map/epoch still binds, and missing snapshots unbind. */
+	CHECK(VSmoke_UpdateMapBinding(&binding, 1, map, 0) == 1);
+	CHECK(VSmoke_UpdateMapBinding(&binding, 1, NULL, 0) == -1);
+	CHECK(!binding.name[0]);
+}
+
 static void TestResolution(void)
 {
 	CHECK(VSmoke_ResolutionDivisor(0) == 1);
@@ -212,6 +233,7 @@ int main(int argc, char **argv)
 	TestInfoValue();
 	TestSelectPolicy();
 	TestGridPath();
+	TestMapLifecycle();
 	TestResolution();
 	TestValidate();
 	TestLoad(stubs);

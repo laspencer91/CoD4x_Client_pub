@@ -25,6 +25,7 @@
 #define con_miniconlines getcvaradr(0x08F141C)
 extern cvar_t *cl_bypassMouseInput;
 extern cvar_t *cl_cod4xsitedom;
+extern cvar_t *cl_maxpackets;
 
 struct field_t
 {

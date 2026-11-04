@@ -2,6 +2,7 @@
 #include "qcommon.h"
 #include "client.h"
 #include "cl_input.h"
+#include "cl_tickrate.h"
 #include "ui_shared.h"
 #include "win_sys.h"
 #include "snd_system.h"
@@ -1041,7 +1042,8 @@ void CL_InitOnceForAllClients(){
   Cvar_RegisterInt("cl_maxPing", 800, 20, 2000, 1, "Maximum ping for the client");
   cl_name = Cvar_RegisterString("name", "", 3, "Player name");
   Cvar_RegisterInt("rate", 25000, 3000, 100000, 3, "Player's preferred network rate");
-  Cvar_RegisterInt("snaps", 20, 1, 75, 3, "Snapshot rate");
+  Cvar_RegisterInt("snaps", 20, 1, 125, 3, "Snapshot rate");
+  CL_Tickrate_Init();
   Cvar_RegisterBool("cl_punkbuster", 1, 19, "Determines if PunkBuster is enabled");
   cl_password = Cvar_RegisterString("password", "", 2, "password");
   cl_nextdemo = Cvar_RegisterString("nextdemo", "", 0, "The next demo to play");
@@ -1307,6 +1309,7 @@ void CL_ClearState( void ) {
 // S_StopAllSounds();
 
 	Com_Memset( &cl, 0, 0x1B1BDC /*sizeof( clientActive_t )*/ );
+	CL_Tickrate_Clear();
 	Com_ClientDObjClearAllSkel();
 }
 
@@ -4388,6 +4391,7 @@ void CL_WritePacket( void ) {
 	cl.outPackets[ packetNum ].p_realtime = cls.realtime;
 	cl.outPackets[ packetNum ].p_serverTime = oldcmd->serverTime;
 	cl.outPackets[ packetNum ].p_cmdNumber = cl.cmdNumber;
+	CL_Tickrate_PacketSent(clc.netchan.outgoingSequence, &cl.outPackets[ packetNum ]);
 	clc.lastPacketSentTime = cls.realtime;
 
 	if ( buf.cursize > MAX_MSGLEN )
@@ -4987,6 +4991,14 @@ qboolean CL_ServerInFilter(netadr_t* adr, int type)
 
 void CL_DownloadLatestConfigurations()
 {
+#ifdef COD4X_TEST_ISOLATION
+	/* Harness runs use known local settings; do not fetch or execute upstream config. */
+	if ( GetEnvironmentVariableW(L"COD4X_TEST_COMMANDS", NULL, 0) )
+	{
+		autoupdateChecked = 1;
+		return;
+	}
+#endif
 	srand( Sys_Milliseconds() );
 
 	CL_TryDownloadAndExecGlobalConfig();
@@ -5557,6 +5569,7 @@ qboolean CL_ReadyToSendPacket()
 {
 	int delta;
 	int oldPacketNum;
+	int due;
 
 	// don't send anything if playing back a demo
 	if ( clientUIActives.state < CA_CONNECTED || clc.demoplaying || clientUIActives.state == CA_CINEMATIC)
@@ -5583,6 +5596,14 @@ qboolean CL_ReadyToSendPacket()
 			return qfalse;
 		}
 	}
+	// Apply matching high-rate pacing before the LAN bypasses, which can be
+	// reached more than once per rendered frame by native and source callers.
+	// Stock/20 Hz servers return -1 and retain the original LAN behavior.
+	due = CL_Tickrate_PacketDue(cls.realtime, cl_maxpackets->integer);
+	if ( due >= 0 ) {
+		return due;
+	}
+
 	// send every frame for loopbacks
 	if ( clc.netchan.remoteAddress.type == NA_LOOPBACK )
 	{
@@ -5595,7 +5616,6 @@ qboolean CL_ReadyToSendPacket()
 
 	oldPacketNum = ( clc.netchan.outgoingSequence - 1 ) & PACKET_MASK;
 	delta = cls.realtime - cl.outPackets[ oldPacketNum ].p_realtime;
-
 	if( delta < 1000 / cl_maxpackets->integer ){
 		return qfalse;
 	}
@@ -7492,7 +7512,7 @@ void CL_ParseServerMessage( msg_t *compressmsg ) {
 				break;
 
 			case svc_snapshot:
-				CL_ParseSnapshot( msg );
+				CL_Tickrate_ParseSnapshot( msg );
 				break;
 
 			case svc_download:
@@ -8583,6 +8603,7 @@ void CL_SystemInfoChanged( void ) {
 
 
 	systemInfo = CL_GetConfigString(CS_SYSTEMINFO);
+	CL_Tickrate_SystemInfoChanged(systemInfo);
 //	Com_Printf(CON_CHANNEL_SYSTEM, "Sysinfo: %s\n", systemInfo);
 	// NOTE TTimo:
 	// when the serverId changes, any further messages we send to the server will use this new serverId

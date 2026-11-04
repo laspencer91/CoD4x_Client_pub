@@ -3,6 +3,10 @@ set(CMAKE_SYSTEM_NAME Windows)
 project(CoD4X-client VERSION 1.0.0 LANGUAGES ASM_NASM C CXX)
 
 option(OFFICIAL_BUILD "Build official release" OFF)
+set(COD4X_APPDATA_SUBDIR "CallofDuty4MW" CACHE STRING "Single LocalAppData folder used by the client and its bootstrap")
+if(NOT COD4X_APPDATA_SUBDIR MATCHES "^[A-Za-z0-9_-]+$")
+    message(FATAL_ERROR "COD4X_APPDATA_SUBDIR must be one ASCII folder name containing only letters, digits, underscore or hyphen")
+endif()
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
@@ -15,6 +19,8 @@ add_library(cod4x SHARED
     src/bg_items.c
     src/rb_backend.c
     src/cl_main.c
+    src/cl_tickrate.c
+    src/cl_tickrate_core.c
     src/pmove.c
     src/xasset_loader.c
     src/xassets/font.c
@@ -77,6 +83,20 @@ add_library(cod4x SHARED
 )
 
 option(VOLUMETRIC_SMOKE "Build the optional volumetric smoke renderer bridge" OFF)
+option(TICKRATE_TESTS "Build client history and packet pacing regression tests" OFF)
+if(TICKRATE_TESTS)
+    enable_testing()
+    add_executable(test_cl_tickrate tests/test_cl_tickrate.c src/cl_tickrate_core.c)
+    # tickrate_replay is loaded by tests/replay_client_tickrate.py (unicorn replay of the
+    # native decoder); it relies on MinGW exporting every non-static function.
+    add_library(tickrate_replay SHARED src/cl_tickrate_core.c)
+    foreach(target test_cl_tickrate tickrate_replay)
+        target_include_directories(${target} PRIVATE src)
+        target_compile_options(${target} PRIVATE -m32 -O2 -std=c11 -Wall -Wextra)
+        target_link_options(${target} PRIVATE -m32 -static)
+    endforeach()
+    add_test(NAME client_tickrate COMMAND test_cl_tickrate)
+endif()
 option(TEST_ISOLATION "Test builds only: app data from COD4X_APPDATA_DIR, no Steam, Discord or registry associations" OFF)
 if(TEST_ISOLATION)
     target_compile_definitions(cod4x PRIVATE COD4X_TEST_ISOLATION=1)
@@ -112,6 +132,7 @@ if(OFFICIAL_BUILD)
 endif()
 
 target_include_directories(cod4x PRIVATE src)
+target_compile_definitions(cod4x PRIVATE "COD4X_APPDATA_SUBDIR=L\"${COD4X_APPDATA_SUBDIR}\"")
 set_target_properties(cod4x PROPERTIES OUTPUT_NAME "cod4x_021")
 
 add_subdirectory(external/discord-rpc)

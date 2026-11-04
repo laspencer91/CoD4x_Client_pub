@@ -15,6 +15,10 @@
 #include <psapi.h>
 #include <stdbool.h>
 
+#ifndef COD4X_APPDATA_SUBDIR
+#define COD4X_APPDATA_SUBDIR L"CallofDuty4MW"
+#endif
+
 #define splashScreen_HWND *((HWND*)(splashScreen_HWND_ADDR))
 #define sys_cmdline ((char*)(sys_cmdline_ADDR))
 #define sys_timeBase *((int*)(sys_timeBase_ADDR))
@@ -1110,7 +1114,7 @@ HMODULE LoadSystemLibraryA(char* libraryname)
 wchar_t* Sys_GetAppDataDir(wchar_t *basepath, int size)
 {
 #ifdef COD4X_TEST_ISOLATION
-	/* Test builds: a private folder instead of the user's LocalAppData\CallofDuty4MW. */
+	/* An explicit test folder takes precedence over the release's namespace. */
 	if ( GetEnvironmentVariableW(L"COD4X_APPDATA_DIR", basepath, size / sizeof(wchar_t)) )
 	{
 		return basepath;
@@ -1142,7 +1146,7 @@ wchar_t* Sys_GetAppDataDir(wchar_t *basepath, int size)
 			if ( SUCCEEDED(hr) )
 			{
 				Q_strncpyzUni(basepath, wszPath, size);
-				Q_strcatUni(basepath, size, L"\\CallofDuty4MW");
+				Q_strcatUni(basepath, size, L"\\" COD4X_APPDATA_SUBDIR);
 			}
 			if(hModuleOle)
 			{
@@ -1160,7 +1164,7 @@ wchar_t* Sys_GetAppDataDir(wchar_t *basepath, int size)
 			if ( SUCCEEDED(hr) )
 			{
 				Q_strncpyzUni(basepath, xpPath, size);
-				Q_strcatUni(basepath, size, L"\\CallofDuty4MW");
+				Q_strcatUni(basepath, size, L"\\" COD4X_APPDATA_SUBDIR);
 			}
 
 		}else{
@@ -1513,7 +1517,7 @@ wchar_t* Sys_GetBinDir1k(wchar_t* bindir)
             if ( GetModuleFileNameW( hMods[i], szModName, sizeof(szModName) / sizeof(szModName[0])))
             {
                 // Print the module name and handle value.
-				wchar_t* f = wcsstr(szModName, L"CallofDuty4MW\\bin\\cod4x_");
+				wchar_t* f = wcsstr(szModName, COD4X_APPDATA_SUBDIR L"\\bin\\cod4x_");
 				if(f)
 				{
 					FS_DirNameUni(szModName);

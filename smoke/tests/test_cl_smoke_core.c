@@ -45,6 +45,32 @@ static void TestSelectPolicy(void)
 	CHECK(VSmoke_SelectPolicy(NULL, NULL, policy, sizeof(policy)) == 0);
 }
 
+static void TestServerType(void)
+{
+    char policy[64];
+    CHECK(VSmoke_ServerType(NULL, NULL) == -1);
+    CHECK(VSmoke_ServerType("", "\\smoke_type\\0") == 0);
+    CHECK(VSmoke_ServerType("", "\\smoke_type\\1") == 1);
+    CHECK(VSmoke_ServerType("\\smoke_type\\0", "\\smoke_type\\1") == 0);
+    CHECK(VSmoke_ServerType("\\smoke_type\\1", "\\smoke_type\\0") == 1);
+    CHECK(VSmoke_ServerType("\\smoke_type\\1\\smoke_type\\1", "\\smoke_type\\1") == -2);
+    CHECK(VSmoke_ServerType("\\smoke_type\\", "\\smoke_type\\1") == -2);
+    CHECK(VSmoke_ServerType("", "\\smoke_type\\01") == -2);
+    CHECK(VSmoke_ServerType("", "\\smoke_type\\1.0") == -2);
+    CHECK(VSmoke_ServerType("", "\\smoke_type\\-1") == -2);
+    CHECK(VSmoke_ServerType("", "\\smoke_type\\2") == -2);
+    CHECK(VSmoke_ServerType("", "\\smoke_type\\1\\smoke_type\\0") == -2);
+    CHECK(!VSmoke_ServerSettings("", "\\smoke_type\\0\\sv_volumetricSmoke\\v1", 1, policy, sizeof(policy)) && !policy[0]);
+    CHECK(VSmoke_ServerSettings("", "\\smoke_type\\1", 0, policy, sizeof(policy)) && !strcmp(policy, "v1"));
+    CHECK(VSmoke_ServerSettings("", "\\smoke_type\\1\\sv_volumetricSmoke\\", 0, policy, sizeof(policy)) && !strcmp(policy, "v1"));
+    CHECK(VSmoke_ServerSettings("", "\\smoke_type\\1\\sv_volumetricSmoke\\v1 brightness=0.8", 0, policy, sizeof(policy)) && !strcmp(policy, "v1 brightness=0.8"));
+    CHECK(!VSmoke_ServerSettings("\\sv_volumetricSmoke\\x\\sv_volumetricSmoke\\y", "\\smoke_type\\1\\sv_volumetricSmoke\\v1", 1, policy, sizeof(policy)) && !policy[0]);
+    CHECK(!VSmoke_ServerSettings("\\smoke_type\\bad", "\\smoke_type\\1", 1, policy, sizeof(policy)) && !policy[0]);
+    CHECK(!VSmoke_ServerSettings("", "\\smoke_type\\1", 0, policy, 2) && !policy[0]);
+    CHECK(!VSmoke_ServerSettings("", "\\sv_volumetricSmoke\\v1", 0, policy, sizeof(policy)) && !strcmp(policy, "v1"));
+    CHECK(VSmoke_ServerSettings("", "\\sv_volumetricSmoke\\v1", 1, policy, sizeof(policy)) && !strcmp(policy, "v1"));
+}
+
 static void TestGridPath(void)
 {
 	char path[64];
@@ -233,6 +259,7 @@ int main(int argc, char **argv)
 	}
 	TestInfoValue();
 	TestSelectPolicy();
+	TestServerType();
 	TestGridPath();
 	TestMapLifecycle();
 	TestResolution();

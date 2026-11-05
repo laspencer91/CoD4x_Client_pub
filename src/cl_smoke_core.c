@@ -58,13 +58,18 @@ int VSmoke_InfoValue(const char *info, const char *key, char *value, size_t valu
 	return found;
 }
 
+/* systeminfo first; serverinfo only when the key is absent there. */
+static int VSmoke_ServerValue(const char *systeminfo, const char *serverinfo,
+	const char *key, char *value, size_t size)
+{
+	int result = VSmoke_InfoValue(systeminfo ? systeminfo : "", key, value, size);
+	if ( result == 0 ) result = VSmoke_InfoValue(serverinfo ? serverinfo : "", key, value, size);
+	return result;
+}
+
 int VSmoke_SelectPolicy(const char *systeminfo, const char *serverinfo, char *policy, size_t policySize)
 {
-	int result = VSmoke_InfoValue(systeminfo ? systeminfo : "", VSMOKE_POLICY_KEY, policy, policySize);
-	if ( result == 0 )
-	{
-		result = VSmoke_InfoValue(serverinfo ? serverinfo : "", VSMOKE_POLICY_KEY, policy, policySize);
-	}
+	int result = VSmoke_ServerValue(systeminfo, serverinfo, VSMOKE_POLICY_KEY, policy, policySize);
 	if ( result != 1 || !policy[0] )
 	{
 		if ( policySize )
@@ -72,6 +77,37 @@ int VSmoke_SelectPolicy(const char *systeminfo, const char *serverinfo, char *po
 			policy[0] = '\0';
 		}
 		return 0;
+	}
+	return 1;
+}
+
+int VSmoke_ServerType(const char *systeminfo, const char *serverinfo)
+{
+	char value[8];
+	int found = VSmoke_ServerValue(systeminfo, serverinfo, VSMOKE_TYPE_KEY, value, sizeof(value));
+	if ( found == 0 ) return -1;
+	if ( found != 1 ) return -2;
+	if ( !strcmp(value, "0") ) return 0;
+	if ( !strcmp(value, "1") ) return 1;
+	return -2;
+}
+
+int VSmoke_ServerSettings(const char *systeminfo, const char *serverinfo, int localEnabled,
+	char *policy, size_t policySize)
+{
+	int type = VSmoke_ServerType(systeminfo, serverinfo), found;
+	if ( !policy || !policySize ) return 0;
+	policy[0] = '\0';
+	if ( type == 0 || type == -2 ) return 0;
+	if ( type == -1 ) {
+		VSmoke_SelectPolicy(systeminfo, serverinfo, policy, policySize);
+		return localEnabled != 0;
+	}
+	found = VSmoke_ServerValue(systeminfo, serverinfo, VSMOKE_POLICY_KEY, policy, policySize);
+	if ( found < 0 ) { policy[0] = '\0'; return 0; }
+	if ( !policy[0] ) {
+		if ( policySize < sizeof("v1") ) return 0;
+		memcpy(policy, "v1", sizeof("v1"));
 	}
 	return 1;
 }

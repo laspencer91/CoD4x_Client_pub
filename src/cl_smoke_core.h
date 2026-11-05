@@ -9,6 +9,7 @@
 #include "vsmoke_api.h"
 
 #define VSMOKE_POLICY_KEY      "sv_volumetricSmoke"
+#define VSMOKE_TYPE_KEY        "smoke_type"
 #define VSMOKE_POLICY_MAX      1024
 #define VSMOKE_DIRECTORY       L"vsmoke"
 #define VSMOKE_LIBRARY         L"vsmoke.dll"
@@ -21,6 +22,15 @@ int VSmoke_InfoValue(const char *info, const char *key, char *value, size_t valu
    serverinfo (servers that publish it with "sets"). An invalid entry in systeminfo does not
    fall back to serverinfo. Returns 1 with the policy, 0 when none (stock smoke). */
 int VSmoke_SelectPolicy(const char *systeminfo, const char *serverinfo, char *policy, size_t policySize);
+
+/* Raw server selection: -1 absent (legacy policy), -2 invalid, 0 stock, 1 volume.
+   A present systeminfo entry has precedence, including malformed/duplicate values. */
+int VSmoke_ServerType(const char *systeminfo, const char *serverinfo);
+
+/* Server type overrides the local on/off preference; quality remains local.
+   Type 1 defaults to v1 when tuning is absent/empty. Malformed info fails closed. */
+int VSmoke_ServerSettings(const char *systeminfo, const char *serverinfo, int localEnabled,
+    char *policy, size_t policySize);
 
 /* "maps/mp/<name>.d3dbsp" -> "maps/mp/<name>.smokegrid". Returns 0 for anything else. */
 int VSmoke_GridPath(const char *bspName, char *path, size_t pathSize);

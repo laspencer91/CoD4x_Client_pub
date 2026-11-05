@@ -6,28 +6,30 @@ run()
     level endon("tickrate_shared_smoke_done");
     if (!getDvarInt("tickrate_test") || getDvar("net_ip") != "127.0.0.1") return;
     level.sharedSmokePlayers = [];
+    expectedClients = getDvarInt("tickrate_smoke_clients");
+    if (expectedClients != 1 && expectedClients != 2) expectedClients = 2;
     level.sharedSmokeBot = undefined;
     level thread watchdog();
     wait 3;
-    logPrint("TICKRATE_SMOKE;WAITING_FOR_TWO_REAL_CLIENTS\n");
+    logPrint("TICKRATE_SMOKE;WAITING_FOR_REAL_CLIENTS;" + expectedClients + "\n");
     started = getTime();
-    while (level.sharedSmokePlayers.size < 2 && getTime() - started < 90000) {
+    while (level.sharedSmokePlayers.size < expectedClients && getTime() - started < 90000) {
         level.sharedSmokePlayers = [];
         players = getEntArray("player", "classname");
         for (i = 0; i < players.size; i++) {
             if (isDefined(players[i].isbot) && players[i].isbot) continue;
             if (!isDefined(players[i].pers["team"])) continue;
             level.sharedSmokePlayers[level.sharedSmokePlayers.size] = players[i];
-            if (level.sharedSmokePlayers.size == 2) break;
+            if (level.sharedSmokePlayers.size == expectedClients) break;
         }
         wait 0.2;
     }
-    if (level.sharedSmokePlayers.size < 2) { fail("two_clients_timeout"); return; }
+    if (level.sharedSmokePlayers.size < expectedClients) { fail("clients_timeout"); return; }
     wait 3;
     level.rdyup = false;
     level.forcedEnd = false;
     game["PROMOD_KNIFEROUND"] = false;
-    for (i = 0; i < 2; i++) level.sharedSmokePlayers[i] thread prepare("allies");
+    for (i = 0; i < expectedClients; i++) level.sharedSmokePlayers[i] thread prepare("allies");
     bot = addTestClient();
     level.sharedSmokeBot = bot;
     if (!isDefined(bot)) { fail("bot_connect"); return; }
@@ -36,7 +38,7 @@ run()
     if (!isDefined(bot.hasSpawned)) { fail("bot_initialized"); return; }
     bot thread prepare("axis");
     wait 3;
-    for (i = 0; i < 2; i++) {
+    for (i = 0; i < expectedClients; i++) {
         if (!isDefined(level.sharedSmokePlayers[i]) || level.sharedSmokePlayers[i].sessionstate != "playing") {
             fail("real_client_spawn");
             return;
@@ -48,7 +50,7 @@ run()
     base = floorAt(points[0].origin);
     yaw = points[0].angles[1];
     side = anglesToForward((0, yaw + 90, 0));
-    for (i = 0; i < 2; i++) {
+    for (i = 0; i < expectedClients; i++) {
         player = level.sharedSmokePlayers[i];
         offset = -24;
         if (i) offset = 24;
@@ -74,15 +76,16 @@ run()
     if (bot getWeaponAmmoStock("smoke_grenade_mp") < 1) { fail("no_smoke_ammo"); return; }
     level.sharedSmokeDetonated = false;
     bot thread captureSmoke();
-    logPrint("TICKRATE_SMOKE;READY;" + getTime() + ";" + getDvarInt("sv_fps") + ";" +
-        level.sharedSmokePlayers[0].name + ";" + level.sharedSmokePlayers[1].name + "\n");
+    names = level.sharedSmokePlayers[0].name;
+    if (expectedClients == 2) names += ";" + level.sharedSmokePlayers[1].name;
+    logPrint("TICKRATE_SMOKE;READY;" + getTime() + ";" + getDvarInt("sv_fps") + ";" + names + "\n");
     bot botAction("+smoke");
     wait 0.8;
     bot botAction("-smoke");
     started = getTime();
     while (!level.sharedSmokeDetonated && getTime() - started < 10000) wait 0.05;
     if (!level.sharedSmokeDetonated) { fail("no_native_detonation"); return; }
-    for (i = 0; i < 2; i++) {
+    for (i = 0; i < expectedClients; i++) {
         player = level.sharedSmokePlayers[i];
         player setPlayerAngles(vectorToAngles(level.sharedSmokeOrigin + (0,0,48) - (player.origin + (0,0,60))));
     }

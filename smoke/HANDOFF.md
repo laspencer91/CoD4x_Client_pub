@@ -186,6 +186,17 @@ must not fall back to serverinfo or a client-writable cvar. The renderer validat
 optional `field=value` parameters. Keep the policy within the shared info-string
 budget. The policy grammar version `v1` is separate from renderer ABI version 2.
 
+November 4 PromodFlex selector: publish `sets smoke_type "0"` for stock or `"1"`
+for volumetric smoke. The bridge validates raw systeminfo before serverinfo;
+explicit type overrides `r_volumetricSmoke`. Type 1 defaults absent/empty tuning
+to `v1`; malformed/duplicate entries fail to stock. Type 0 clears the renderer
+policy. Servers without the selector keep legacy behavior. Player render quality
+remains selectable. Apply type changes before map/restart. The new release client
+pins the optimized renderer hash; use matching private client/server packages.
+The current server/profile configurations default to `smoke_type 1`; new client
+configurations default to quarter resolution. Existing archived quality choices
+are retained.
+
 The bridge manages `r_zFeather` when scene depth is required and mirrors its trusted
 permission in read-only `cl_volumetricSmokeDepth`. Promod HUD checks use that ROM
 value; old writable `promod_smokeDepth`/`promod_networkRate` helpers are not authority.

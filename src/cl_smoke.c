@@ -113,6 +113,7 @@ static struct
 	char policy[VSMOKE_POLICY_MAX];
 	int resolution;
 	int enabled;
+	int serverType;
 	qboolean settingsSent;
 	qboolean deviceLive;
 	qboolean featherForced;
@@ -127,6 +128,7 @@ static cvar_t *r_volumetricSmoke;
 static cvar_t *cl_volumetricSmokeDepth;
 static cvar_t *r_volumetricSmokeQuality;
 static const char *smokeQualityNames[] = { "full", "half", "quarter", NULL };
+#define SMOKE_QUALITY_DEFAULT 2 /* quarter */
 
 typedef struct
 {
@@ -277,6 +279,8 @@ static void CL_Smoke_Status_f(void)
 		r_volumetricSmoke->boolean ? "on" : "off");
 	Com_Printf(CON_CHANNEL_DONT_FILTER, "Volumetric smoke: server policy %s\n",
 		smoke.policy[0] ? smoke.policy : "not set (stock smoke)");
+	Com_Printf(CON_CHANNEL_DONT_FILTER, "Volumetric smoke: server smoke_type=%d effective_enabled=%d (-1 legacy, -2 invalid)\n",
+		smoke.serverType, smoke.enabled);
 	if ( smoke.renderer->status && smoke.renderer->status(text, sizeof(text)) > 0 )
 	{
 		Com_Printf(CON_CHANNEL_DONT_FILTER, "Volumetric smoke: %s\n", text);
@@ -284,7 +288,7 @@ static void CL_Smoke_Status_f(void)
 	Com_Printf(CON_CHANNEL_DONT_FILTER, "Volumetric smoke: hooks composite=%u prepare=%u particles=%u effects=%u bullets=%u routed=%u\n",
 		smoke.hits[0], smoke.hits[1], smoke.hits[2], smoke.hits[3], smoke.hits[4], smoke.hits[5]);
 	Com_Printf(CON_CHANNEL_DONT_FILTER, "Volumetric smoke: quality %s (r_volumetricSmokeQuality full|half|quarter)\n",
-		smokeQualityNames[r_volumetricSmokeQuality->integer >= 0 && r_volumetricSmokeQuality->integer < 3 ? r_volumetricSmokeQuality->integer : 2]);
+		smokeQualityNames[r_volumetricSmokeQuality->integer >= 0 && r_volumetricSmokeQuality->integer < 3 ? r_volumetricSmokeQuality->integer : SMOKE_QUALITY_DEFAULT]);
 }
 
 void CL_Smoke_Init(void)
@@ -301,8 +305,8 @@ void CL_Smoke_Init(void)
 	Cvar_SetBool(cl_volumetricSmokeDepth, qfalse);
 	cl_smoke_sceneDepth = qfalse;
 	r_volumetricSmoke = Cvar_RegisterBool("r_volumetricSmoke", qtrue, CVAR_ARCHIVE,
-		"Use the volumetric smoke renderer on servers that enable it");
-	r_volumetricSmokeQuality = Cvar_RegisterEnum("r_volumetricSmokeQuality", smokeQualityNames, 2, CVAR_ARCHIVE,
+		"Legacy smoke preference; servers publishing smoke_type choose the smoke implementation");
+	r_volumetricSmokeQuality = Cvar_RegisterEnum("r_volumetricSmokeQuality", smokeQualityNames, SMOKE_QUALITY_DEFAULT, CVAR_ARCHIVE,
 		"Volumetric smoke render resolution: quarter by default; half/full are manual overrides");
 	Cmd_AddCommand("volumetricsmoke_status", CL_Smoke_Status_f);
 
@@ -373,20 +377,25 @@ static void CL_Smoke_UpdateSettings(void)
 	char policy[VSMOKE_POLICY_MAX];
 	int resolution = VSmoke_ResolutionDivisor(r_volumetricSmokeQuality->integer);
 	int enabled = r_volumetricSmoke->boolean ? 1 : 0;
+	int serverType = -1;
 
 	policy[0] = '\0';
 	if ( clientUIActives.state >= CA_PRIMED )
 	{
 		/* The raw replicated configstrings, not a client-writable cvar copy. */
-		VSmoke_SelectPolicy(CL_GetConfigString(CS_SYSTEMINFO), CL_GetConfigString(CS_SERVERINFO), policy, sizeof(policy));
+		const char *systeminfo = CL_GetConfigString(CS_SYSTEMINFO);
+		const char *serverinfo = CL_GetConfigString(CS_SERVERINFO);
+		serverType = VSmoke_ServerType(systeminfo, serverinfo);
+		enabled = VSmoke_ServerSettings(systeminfo, serverinfo, enabled, policy, sizeof(policy));
 	}
-	if ( smoke.settingsSent && !strcmp(policy, smoke.policy) && resolution == smoke.resolution && enabled == smoke.enabled )
+	if ( smoke.settingsSent && !strcmp(policy, smoke.policy) && resolution == smoke.resolution && enabled == smoke.enabled && serverType == smoke.serverType )
 	{
 		return;
 	}
 	Q_strncpyz(smoke.policy, policy, sizeof(smoke.policy));
 	smoke.resolution = resolution;
 	smoke.enabled = enabled;
+	smoke.serverType = serverType;
 	smoke.settingsSent = qtrue;
 	if ( smoke.renderer->set_settings )
 	{

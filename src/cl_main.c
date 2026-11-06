@@ -16,6 +16,9 @@
 #include "discord-rpc/discord_rpc.h"
 #include "discord-rpc/discord_register.h"
 #include "r_shared.h"
+#ifdef COD4X_RMLUI
+#include "cl_rml.h"
+#endif
 
 #include "tomcrypt/tomcrypt.h"
 #ifdef COD4X_VOLUMETRIC_SMOKE
@@ -1082,6 +1085,9 @@ void CL_InitOnceForAllClients(){
   Cmd_AddCommand("logo", CL_PlayLogo_f);
 #ifdef COD4X_VOLUMETRIC_SMOKE
   CL_Smoke_Init();
+#endif
+#ifdef COD4X_RMLUI
+  CL_Rml_Init();
 #endif
 	if(!com_demoplayer->boolean)
 	{
@@ -5328,6 +5334,9 @@ void LiveStorage_ReadStatsIfDirChanged()
 
 void CL_Disconnect( )
 {
+#ifdef COD4X_RMLUI
+    CL_Rml_Hide();
+#endif
 	qboolean playedDemo;
 
 	if ( !clientUIActives.cl_running )
@@ -8715,6 +8724,9 @@ void Scr_UpdateFrame()
 
 
         }
+#ifdef COD4X_RMLUI
+        CL_Rml_Frame();
+#endif
         Con_DrawConsole();
     }
 
@@ -9488,6 +9500,9 @@ void CL_ShowSystemCursor(int show)
 
 qboolean CL_MouseEvent(int x, int y, int dx, int dy)
 {
+#ifdef COD4X_RMLUI
+    if (CL_Rml_MouseEvent(x, y)) return qfalse;
+#endif
 	clientActive_t *clLoc;
 /*
 	if ( DevGui_IsActive() )

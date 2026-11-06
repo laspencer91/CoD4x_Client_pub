@@ -34,6 +34,9 @@ If you have questions concerning this license or the applicable additional terms
 #include "cl_input.h"
 #include "win_sys.h"
 #include "snd_system.h"
+#ifdef COD4X_RMLUI
+#include "cl_rml.h"
+#endif
 #include <windows.h>
 #include <windowsx.h>
 
@@ -297,6 +300,9 @@ LONG WINAPI MainWndProc(
 	break;
 
 	case WM_KILLFOCUS:
+#ifdef COD4X_RMLUI
+        CL_Rml_Hide();
+#endif
 
 		if(r_autopriority && r_autopriority->boolean){
 			SetPriorityClass(GetCurrentProcess(),0x40);

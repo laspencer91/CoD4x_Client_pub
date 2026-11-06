@@ -3,6 +3,10 @@
 #include "cl_smoke.h"
 #endif
 #include "qcommon.h"
+#include "sys_patch.h"
+#ifdef COD4X_RMLUI
+#include "rml/rml_host.h"
+#endif
 #include "r_shared.h"
 #include "xassets/gfxworld.h"
 #include "xzone.h"
@@ -186,6 +190,36 @@ void R_DestroyGameWindows()
   r_dx.rWindowsState.numWindows = 0;
 }
 
+#if defined(COD4X_RMLUI) || defined(COD4X_VOLUMETRIC_SMOKE)
+static void R_NotifyDeviceLost(void)
+{
+#ifdef COD4X_RMLUI
+  RmlHost_DeviceLost();
+#endif
+#ifdef COD4X_VOLUMETRIC_SMOKE
+  CL_Smoke_DeviceLost();
+#endif
+}
+
+static void R_ReleaseForReset(void)
+{
+  R_NotifyDeviceLost();
+  sub_5F3FD0();
+}
+
+void R_PatchDeviceReset(void)
+{
+  const byte *site = (const byte*)0x5F5278;
+  int displacement;
+  memcpy(&displacement, site + 1, sizeof(displacement));
+  if (site[0] != 0xE8 || (uintptr_t)(site + 5) + displacement != 0x5F3FD0) {
+    Com_PrintWarning(CON_CHANNEL_GFX, "Device reset notification hook does not match this runtime.\n");
+    return;
+  }
+  SetCall(0x5F5278, R_ReleaseForReset);
+}
+#endif
+
 void __cdecl R_ShutdownD3D()
 {
 
@@ -194,8 +228,8 @@ void __cdecl R_ShutdownD3D()
     DB_ShutdownXAssets();
   }
   DB_ClearXAssetMem();
-#ifdef COD4X_VOLUMETRIC_SMOKE
-  CL_Smoke_DeviceLost();
+#if defined(COD4X_RMLUI) || defined(COD4X_VOLUMETRIC_SMOKE)
+  R_NotifyDeviceLost();
 #endif
   sub_60D7D0();
   sub_5F3FD0();

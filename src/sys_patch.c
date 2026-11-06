@@ -201,6 +201,9 @@ qboolean Sys_IsLANAddress_Dummy()
 	return qfalse;
 }
 void Gfx_PatchRB_ExecuteRendererCommandsLoop();
+#if defined(COD4X_RMLUI) || defined(COD4X_VOLUMETRIC_SMOKE)
+void R_PatchDeviceReset(void);
+#endif
 void CG_InitConsoleCommandsPatched();
 void CompleteDvarArgument();
 extern char* ui_updatesourcestrings[];
@@ -1084,6 +1087,9 @@ void Patch_Other(){
   CL_Tickrate_Patch();
 #ifdef COD4X_VOLUMETRIC_SMOKE
   CL_Smoke_Patch();
+#endif
+#ifdef COD4X_RMLUI
+  R_PatchDeviceReset();
 #endif
 
 

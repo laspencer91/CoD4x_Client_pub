@@ -9,6 +9,9 @@
 #include "refdef.h"
 #include <d3d9.h>
 #include <stdbool.h>
+#if defined(COD4X_RMLUI) || defined(COD4X_VOLUMETRIC_SMOKE)
+void R_PatchDeviceReset(void);
+#endif
 //#include <d3dx9.h>
 
 #define r_dx (*((DxGlobals_t*)(0xCC9A400)))

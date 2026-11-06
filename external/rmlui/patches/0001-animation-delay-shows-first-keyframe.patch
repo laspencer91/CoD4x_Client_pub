@@ -1,0 +1,42 @@
+diff --git a/Plugins/ProlineRml/Source/RmlUiCore/RmlUi/Source/Core/ElementAnimation.cpp b/Plugins/ProlineRml/Source/RmlUiCore/RmlUi/Source/Core/ElementAnimation.cpp
+index 1da53683..8e7a1e46 100644
+--- a/Plugins/ProlineRml/Source/RmlUiCore/RmlUi/Source/Core/ElementAnimation.cpp
++++ b/Plugins/ProlineRml/Source/RmlUiCore/RmlUi/Source/Core/ElementAnimation.cpp
+@@ -746,7 +746,21 @@ Property ElementAnimation::UpdateAndGetProperty(double world_time, Element& elem
+ {
+ 	float dt = float(world_time - last_update_world_time);
+ 	if (keys.size() < 2 || animation_complete || dt <= 0.0f)
++	{
++		// Proline patch 0001: an 'animation'-property animation still waiting out its delay previews the
++		// first keyframe once (CSS animation-fill-mode: backwards), instead of showing the base rule for
++		// the whole delay. Key 0 is either the resolved 0% keyframe or, if none was authored, the
++		// element's value when the animation started (see Element::HandleAnimationProperty), so it is
++		// already the correct "before start" value. Applied once (delay_fill_applied) since SetProperty
++		// dirties layout; transitions and Element::Animate (ElementAnimationOrigin::User) keep the old
++		// silent wait.
++		if (!animation_complete && dt <= 0.0f && keys.size() >= 2 && origin == ElementAnimationOrigin::Animation && !delay_fill_applied)
++		{
++			delay_fill_applied = true;
++			return keys[0].property;
++		}
+ 		return Property{};
++	}
+ 
+ 	dt = Math::Min(dt, 0.1f);
+ 
+diff --git a/Plugins/ProlineRml/Source/RmlUiCore/RmlUi/Source/Core/ElementAnimation.h b/Plugins/ProlineRml/Source/RmlUiCore/RmlUi/Source/Core/ElementAnimation.h
+index c0420129..6fedef40 100644
+--- a/Plugins/ProlineRml/Source/RmlUiCore/RmlUi/Source/Core/ElementAnimation.h
++++ b/Plugins/ProlineRml/Source/RmlUiCore/RmlUi/Source/Core/ElementAnimation.h
+@@ -37,6 +37,11 @@ private:
+ 	bool animation_complete = false;
+ 	ElementAnimationOrigin origin = ElementAnimationOrigin::User;
+ 
++	// Proline patch 0001: set once UpdateAndGetProperty has applied the first keyframe as a preview
++	// while an 'animation'-property delay is still elapsing, so the preview is only ever applied once
++	// (SetProperty dirties layout) and not re-applied every frame until the delay ends.
++	bool delay_fill_applied = false;
++
+ 	bool InternalAddKey(float time, const Property& property, Element& element, Tween tween);
+ 
+ 	float GetInterpolationFactorAndKeys(int* out_key0, int* out_key1) const;

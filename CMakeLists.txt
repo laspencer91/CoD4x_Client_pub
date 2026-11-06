@@ -3,6 +3,14 @@ set(CMAKE_SYSTEM_NAME Windows)
 project(CoD4X-client VERSION 1.0.0 LANGUAGES ASM_NASM C CXX)
 
 option(OFFICIAL_BUILD "Build official release" OFF)
+option(RMLUI "Build the optional RmlUi diagnostic host" OFF)
+option(RMLUI_TESTS "Build standalone RmlUi render and lifecycle checks" OFF)
+if(RMLUI_TESTS)
+    if(NOT RMLUI)
+        message(FATAL_ERROR "RMLUI_TESTS requires RMLUI")
+    endif()
+    enable_testing()
+endif()
 set(COD4X_APPDATA_SUBDIR "CallofDuty4MW" CACHE STRING "Single LocalAppData folder used by the client and its bootstrap")
 if(NOT COD4X_APPDATA_SUBDIR MATCHES "^[A-Za-z0-9_-]+$")
     message(FATAL_ERROR "COD4X_APPDATA_SUBDIR must be one ASCII folder name containing only letters, digits, underscore or hyphen")
@@ -11,6 +19,12 @@ endif()
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
+if(RMLUI)
+    add_subdirectory(external/freetype)
+    add_subdirectory(external/rmlui)
+    add_subdirectory(src/rml)
+endif()
 
 set(CMAKE_SHARED_LIBRARY_PREFIX "")
 add_library(cod4x SHARED
@@ -81,6 +95,12 @@ add_library(cod4x SHARED
     src/client_callbacks.asm
     src/fsdword.asm
 )
+
+if(RMLUI)
+    target_sources(cod4x PRIVATE src/cl_rml.c)
+    target_compile_definitions(cod4x PRIVATE COD4X_RMLUI=1)
+    target_link_libraries(cod4x PRIVATE cod4x_rml)
+endif()
 
 option(VOLUMETRIC_SMOKE "Build the optional volumetric smoke renderer bridge" OFF)
 option(TICKRATE_TESTS "Build client history and packet pacing regression tests" OFF)

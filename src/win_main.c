@@ -2,6 +2,9 @@
 #include "qcommon.h"
 #include "win_sys.h"
 #include "client.h"
+#ifdef COD4X_RMLUI
+#include "cl_rml.h"
+#endif
 #include "crc.h"
 #include "crashrpt/TinyCrashRpt.h"
 
@@ -308,7 +311,7 @@ void Sys_CreateMainWindowClass(){
 	}
 }
 
-void Sys_LoadModules(HINSTANCE hInstance){
+void Sys_LoadModules(HINSTANCE gameInstance){
     HINSTANCE base;
     FARPROC proc;
     int i, copylen;
@@ -321,7 +324,7 @@ void Sys_LoadModules(HINSTANCE hInstance){
     if(loaded == qtrue)
         return;
 
-    copylen = GetModuleFileNameA(hInstance, moduledir, sizeof(moduledir));
+    copylen = GetModuleFileNameA(gameInstance, moduledir, sizeof(moduledir));
 
     if (copylen < 1 || strrchr(moduledir, '\\') == NULL)
     {
@@ -336,7 +339,11 @@ void Sys_LoadModules(HINSTANCE hInstance){
     base = LoadLibraryA(miles32path);
 
     if(!base){
-        preInitError("Error loading module mss32.dll\n");
+        DWORD error = GetLastError();
+        char message[1200];
+        Com_sprintf(message, sizeof(message), "Error loading module miles32.dll\nPath: %s\nWindows error: %lu\n",
+            miles32path, (unsigned long)error);
+        preInitError(message);
     }
     proc = GetProcAddress(base, "_AIL_set_DirectSound_HWND@8");
     if(!proc)
@@ -931,6 +938,9 @@ void Sys_Quit()
     Sys_EnterCriticalSection( 2 );
     timeEndPeriod(1u);
     IN_Shutdown(); //sub_575E90();
+#ifdef COD4X_RMLUI
+    CL_Rml_Shutdown();
+#endif
     Key_Shutdown(); //sub_4685D0();
 	Sys_NormalExit();
 	Win_ShutdownLocalization( );

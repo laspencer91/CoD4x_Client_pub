@@ -1,0 +1,53 @@
+<rml>
+<head>
+    <title>PromodFlex interface lab</title>
+    <link type="text/rcss" href="shared/tokens.rcss" />
+    <link type="text/rcss" href="diagnostic.rcss" />
+</head>
+<body data-model="diagnostic">
+    <div class="sheet">
+        <div class="masthead">
+            <div class="brand">PROMOD<span class="accent">FLEX</span></div>
+            <div class="edition eyebrow">INTERFACE LAB / 01</div>
+            <div class="live"><span class="live-dot">&#8226;</span> NATIVE D3D9</div>
+        </div>
+        <div class="intro">
+            <div class="intro-copy">
+                <div class="eyebrow accent">SYSTEMS CHECK</div>
+                <div class="headline">A new interface.<br />The same game.</div>
+                <div class="description">Surfaces, motion and feedback for the next<br />PromodFlex loadout screen.</div>
+            </div>
+            <div class="readout">
+                <div class="eyebrow">RMLUI / FIRST CONTACT</div>
+                <div class="readout-line"><span>DOCUMENT</span><span class="accent">LOADED</span></div>
+                <div class="readout-line"><span>FONT ENGINE</span><span>FREETYPE</span></div>
+                <div class="readout-line"><span>LOCAL ACTIONS</span><span class="cash">{{activations}}</span></div>
+                <div class="readout-foot">A diagnostic surface. No purchases are made here.</div>
+            </div>
+        </div>
+        <div class="grid">
+            <div class="panel first">
+                <div class="panel-label"><span class="index">01</span> SURFACES</div>
+                <div class="panel-note">Smoked glass. Fine rules. Warm accents.</div>
+                <div class="swatch"><div class="swatch-rule" /><div class="eyebrow">FIELD EQUIPMENT</div><div class="swatch-title">ASSAULT</div><div class="swatch-caption">SELECTED / 3 OF 5 SLOTS</div></div>
+                <div class="palette-strip"><div class="chip charcoal" /><div class="chip olive" /><div class="chip amber" /><div class="chip white" /></div>
+            </div>
+            <div class="panel middle">
+                <div class="panel-label"><span class="index">02</span> MOTION</div>
+                <div class="panel-note">A short sweep with a steady readout.</div>
+                <div id="motion-preview" class="motion-preview"><div class="motion-bracket left" /><div class="motion-bracket right" /><div class="signal">SIGNAL ACQUIRED</div><div class="signal-track"><div class="signal-sweep" /></div></div>
+                <input type="button" class="control" id="replay" data-action="replay" value="REPLAY FEEDBACK" />
+            </div>
+            <div class="panel last">
+                <div class="panel-label"><span class="index">03</span> INTERACTION</div>
+                <div class="panel-note">Hover, focus and press. One cue per control.</div>
+                <input type="button" class="control" id="select" data-action="select" value="SELECT / LOCAL CHECK" />
+                <input type="button" class="control" id="unavailable" disabled="disabled" value="UNAVAILABLE" />
+                <input type="button" class="control" id="close" data-action="close" value="CLOSE INTERFACE" />
+            </div>
+        </div>
+        <div class="feedback"><div class="feedback-marker" /><div class="feedback-text">{{status}}</div></div>
+        <div class="footer"><div class="eyebrow">TAB / FOCUS &#160;&#160; ENTER / SELECT &#160;&#160; ESC / CLOSE</div><div class="footer-right">PMF / DEVELOPMENT</div></div>
+    </div>
+</body>
+</rml>

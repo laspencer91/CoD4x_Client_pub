@@ -3,3 +3,7 @@
 *.o -diff
 *.exe -diff
 *.so -diff
+external/rmlui/vendor/** -text -whitespace
+external/rmlui/patches/** -text -whitespace
+external/freetype/vendor/** -text -whitespace
+ui/rml/fonts/*.otf binary

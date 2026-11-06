@@ -1,5 +1,8 @@
 #include "q_shared.h"
 #include "qcommon.h"
+#ifdef COD4X_RMLUI
+#include "cl_rml.h"
+#endif
 #include "client.h"
 #include "server.h"
 #include "win_sys.h"
@@ -469,10 +472,16 @@ int Com_EventLoop( void ) {
 				return ev.evTime;
 
 			case SE_KEY:
+#ifdef COD4X_RMLUI
+                if (CL_Rml_KeyEvent(ev.evValue, ev.evValue2)) break;
+#endif
 				CL_KeyEvent( 0, ev.evValue, ev.evValue2, ev.evTime );
 				break;
 
 			case SE_CHAR:
+#ifdef COD4X_RMLUI
+                if (CL_Rml_CharEvent(ev.evValue)) break;
+#endif
 				CL_CharEvent(ev.evValue);
 				break;
 

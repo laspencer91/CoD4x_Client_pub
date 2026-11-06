@@ -192,12 +192,6 @@ static qboolean CL_Smoke_SitesUnchanged(void)
 	return qtrue;
 }
 
-static void CL_Smoke_ReleaseForReset(void)
-{
-	CL_Smoke_DeviceLost();
-	sub_5F3FD0();
-}
-
 void CL_Smoke_Patch(void)
 {
 	HMODULE client = NULL;
@@ -224,12 +218,14 @@ void CL_Smoke_Patch(void)
 	SetCall(ADDR_SIM_TRACE_CALL_0, VSmoke_Stub_SimulatedTrace);
 	SetCall(ADDR_SIM_TRACE_CALL_1, VSmoke_Stub_SimulatedTrace);
 	SetCall(ADDR_SIM_TRACE_CALL_2, VSmoke_Stub_SimulatedTrace);
-	SetCall(ADDR_RESET_RELEASE_CALL, CL_Smoke_ReleaseForReset);
 	SetJump(ADDR_TECHNIQUE, VSmoke_Stub_Technique);
 	*(byte*)(ADDR_TECHNIQUE + 5) = NOP;
 	SetJump(ADDR_TECHNIQUE_ALT, VSmoke_Stub_TechniqueAlt);
 	*(byte*)(ADDR_TECHNIQUE_ALT + 5) = NOP;
 	smoke.hooked = qtrue;
+#ifndef COD4X_RMLUI
+    R_PatchDeviceReset();
+#endif
 }
 
 /* Host services */

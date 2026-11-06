@@ -68,6 +68,9 @@ int wmain(int argc, wchar_t **argv)
 	{
 		startup.dwFlags = STARTF_USESHOWWINDOW;
 		startup.wShowWindow = SW_SHOWMINNOACTIVE;
+#ifdef RML_LAB_FOREGROUND
+        startup.wShowWindow = SW_SHOWNORMAL;
+#endif
 	}
 	if ( !CreateProcessW(exe, command, NULL, NULL, FALSE, CREATE_SUSPENDED, NULL, argv[first], &startup, &process) )
 	{

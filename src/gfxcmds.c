@@ -8,6 +8,10 @@
 #include "xzone.h"
 #include <stdbool.h>
 #include <d3dx9core.h>
+#ifdef COD4X_RMLUI
+#include "cl_rml.h"
+#include "rml/rml_host.h"
+#endif
 #define s_cmdList (*((GfxCmdArray**)(0xCC9F4A4)))
 #define s_renderCmdBufferSize (*(int*)(0xCC9F49C))
 
@@ -1091,6 +1095,31 @@ void __cdecl RB_StretchPicCmd(GfxCmdHeader **pheader)
 
 
 
+#ifdef COD4X_RMLUI
+typedef struct { GfxCmdHeader header; uint32_t ticket; } GfxCmdRml;
+
+int R_QueueRmlFrame(uint32_t ticket)
+{
+    GfxCmdRml *cmd;
+    if (!s_cmdList || s_cmdList->usedCritical - s_cmdList->usedTotal + s_renderCmdBufferSize - 0x2000 < sizeof(*cmd)) return 0;
+    cmd = (void*)&s_cmdList->cmds[s_cmdList->usedTotal];
+    s_cmdList->usedTotal += sizeof(*cmd);
+    s_cmdList->lastCmd = &cmd->header;
+    cmd->header.id = 21;
+    cmd->header.byteCount = sizeof(*cmd);
+    cmd->ticket = ticket;
+    return 1;
+}
+
+static void RB_DrawRmlCmd(GfxCmdHeader **header)
+{
+    GfxCmdRml *cmd = (void*)*header;
+    if (tess.indexCount) RB_EndTessSurface();
+    RmlHost_Render(r_dx.device, cmd->ticket);
+    *header = (void*)((byte*)cmd + cmd->header.byteCount);
+}
+#endif
+
 void (__cdecl *RB_RenderCommandTable[])(GfxCmdHeader **) =
 {
   NULL,
@@ -1114,6 +1143,9 @@ void (__cdecl *RB_RenderCommandTable[])(GfxCmdHeader **) =
   &RBCmd_6134B0,
   &RBCmd_613680,
   &RBCmd_6150C0
+#ifdef COD4X_RMLUI
+  , &RB_DrawRmlCmd
+#endif
 };
 
 

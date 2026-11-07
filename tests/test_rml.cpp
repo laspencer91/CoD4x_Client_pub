@@ -282,6 +282,29 @@ int main(int argc, char** argv) {
         Check(D3DXSaveSurfaceToFileA(RML_TEST_OUTPUT "/rml-strikepoint-picker.png", D3DXIFF_PNG, gpu.surface, nullptr, nullptr), "capture indexed picker with actual artwork and focused row");
         RmlHost_Key(RML_KEY_ENTER,1,0); RmlHost_Key(RML_KEY_ENTER,0,0); gpu.Render(13.5);
         Require(economy_requests.back()=="pick_primary:1" && !restored_doc->GetElementById("primary-drawer")->IsVisible(), "Enter equips the focused picker entry and closes the drawer");
+        economy_values["flat_loadout_mode"]="standard";
+        economy_values["weap_allow_frag_grenade"]="1";
+        economy_values["flat_camo_label"]="Woodland"; economy_values["flat_camo_material"]="ui_camoskin_bshdwl";
+        economy_values["flat_utility_name"]="SMOKE"; economy_values["flat_team"]="ATTACK"; economy_values["mapname"]="mp_crash";
+        economy_values["flat_mate_0_exists"]="1"; economy_values["flat_mate_0_name"]="MAVERICK";
+        economy_values["flat_mate_0_class"]="Spec Ops"; economy_values["flat_mate_0_primary"]="mp5";
+        economy_values["flat_mate_0_utility"]="weapon_flashbang"; economy_values["flat_mate_0_frag"]="1";
+        economy_values["flat_demolitions_allowed"]="1";
+        economy_values["flat_demolitions_capacity"]="0/1";
+        economy_values["attach_allow_assault_silencer"]="1";
+        economy_values["attach_allow_assault_reflex"]="1";
+        gpu.Render(14.0);
+        Require(!restored_doc->QuerySelector(".top-status")->IsVisible() &&
+            !restored_doc->QuerySelector(".armor-card")->IsVisible() &&
+            !restored_doc->QuerySelector(".rebuy-panel")->IsVisible(), "standard mode hides wallet, buy phase, armor and rebuy");
+        Require(restored_doc->QuerySelector(".standard-frag")->IsVisible(), "standard mode retains the included frag card");
+        Require(restored_doc->GetElementById("deploy")->GetAttribute<Rml::String>("value", "")=="CONFIRM", "standard mode uses a class confirmation action");
+        const auto requests_before = economy_requests.size();
+        RmlHost_Key('z',1,0); RmlHost_Key('z',0,0); RmlHost_Key('x',1,0); RmlHost_Key('x',0,0); gpu.Render(14.1);
+        Require(economy_requests.size()==requests_before, "standard mode never submits paid equipment shortcuts");
+        RmlHost_Key('4',1,0); RmlHost_Key('4',0,0); gpu.Render(14.2);
+        Require(economy_requests.back()=="select:demolitions", "standard Demolition uses normal class selection");
+        Check(D3DXSaveSurfaceToFileA(RML_TEST_OUTPUT "/rml-standard-loadout.png", D3DXIFF_PNG, gpu.surface, nullptr, nullptr), "capture shared standard class menu");
         Require(warnings==0, "economy parses without model or stylesheet diagnostics");
         RmlHost_Shutdown(); RmlHost_SetSourceDirectory(nullptr); RmlHost_SetModSourceDirectory(nullptr);
         std::puts("RML_ECONOMY_CHECKS_PASSED"); return 0;

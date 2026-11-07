@@ -103,7 +103,7 @@ void CL_Rml_MenuOpened(menuDef_t *menu)
 {
     static const char *names[] = {"flat_loadout", "flat_primary_picker", "flat_secondary_picker", "flat_demolition_confirm"};
     int i;
-    if (!rml_economy || !rml_economy->boolean || !rml_enabled->boolean || !Cvar_GetInt("flat_economy_live") || Sys_Milliseconds() < rml_retry_at) return;
+    if (!rml_economy || !rml_economy->boolean || !rml_enabled->boolean || (!Cvar_GetInt("flat_economy_live") && !(Cvar_GetInt("flat_loadout_ready") && !Q_stricmp(Cvar_GetString("flat_loadout_mode"), "standard"))) || Sys_Milliseconds() < rml_retry_at) return;
     for (i = 0; i < 4; ++i) if (!Q_stricmp(menu->window.name, names[i])) break;
     if (i == 4 || (i && !rml_menus[0].menu)) return;
     if (!i) { RmlHost_EconomyDialog(0); if (!CL_Rml_Show(RML_SCREEN_ECONOMY)) { rml_retry_at=Sys_Milliseconds()+1000; return; } rml_retry_at=0; }
@@ -174,7 +174,7 @@ void CL_Rml_Init(void)
     if (mod_source && !RmlHost_SetModSourceDirectory(mod_source)) CL_Rml_Log("mod authoring directory is unavailable");
 #endif
     rml_enabled = Cvar_RegisterBool("r_rmlUi", qtrue, 0, "Enable the optional RmlUi host");
-    rml_economy = Cvar_RegisterBool("r_rmlEconomy", qtrue, 0, "Use RmlUi for the economy loadout, with native fallback");
+    rml_economy = Cvar_RegisterBool("r_rmlEconomy", qtrue, 0, "Use RmlUi for class/loadout menus, with native fallback");
     Cmd_AddCommand("rml_show", CL_Rml_Show_f);
     Cmd_AddCommand("rml_palette", CL_Rml_Palette_f);
     Cmd_AddCommand("rml_economy_preview", CL_Rml_EconomyPreview_f);

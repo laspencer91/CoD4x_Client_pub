@@ -40,6 +40,7 @@ private:
     Rml::String primary_icon, secondary_icon, tactical_icon, camo_icon;
     Rml::String suppressor_price, reflex_price, pistol_price, class_family;
     int teammate_count = 0;
+    bool economy_mode = true;
     bool scope = false, buy_warning = false, buy_urgent = false;
     bool buy_open = false, purchase_allowed = false, has_class = false, armor_buy = false, frag_buy = false;
     bool armor_one = false, armor_two = false, armor_refund = false, frag_owned = false, frag_refund = false;

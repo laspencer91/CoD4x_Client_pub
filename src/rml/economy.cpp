@@ -60,7 +60,7 @@ void EconomyView::Init(Rml::Context* context) {
 
     BIND(primary_icon); BIND(secondary_icon); BIND(tactical_icon); BIND(camo_icon);
     BIND(suppressor_price); BIND(reflex_price); BIND(pistol_price); BIND(class_family);
-    BIND(teammate_count); BIND(scope); BIND(buy_warning); BIND(buy_urgent);
+    BIND(economy_mode); BIND(teammate_count); BIND(scope); BIND(buy_warning); BIND(buy_urgent);
     BIND(rebuy_rows);
     BIND(rebuy_empty);
     BIND(buy_open); BIND(purchase_allowed); BIND(has_class); BIND(armor_buy); BIND(frag_buy); BIND(armor_one); BIND(armor_two);
@@ -92,6 +92,9 @@ void EconomyView::Update(const rml_host_t& host, bool use_fixture, double second
     auto value = [&](const Rml::String& key) { return Value(host, key, use_fixture); };
     auto number = [&](const Rml::String& key) { return std::atoi(value(key).c_str()); };
     preview = use_fixture;
+    const bool next_economy_mode = use_fixture || value("flat_loadout_mode") != "standard";
+    if (economy_mode != next_economy_mode) { focus_body.clear(); pending = false; model.DirtyAllVariables(); }
+    economy_mode = next_economy_mode;
     const auto before = values;
     const int cash = number("economy_cash"); wallet = "$" + std::to_string(cash);
     buy_open = number("economy_buy_open") != 0; purchase_allowed = number("economy_purchase_allowed") != 0;
@@ -116,7 +119,7 @@ void EconomyView::Update(const rml_host_t& host, bool use_fixture, double second
         const auto divider = row.detail.find('/');
         if (!row.enabled && divider != Rml::String::npos && std::atoi(row.detail.c_str() + divider + 1) > 0 &&
             std::atoi(row.detail.c_str()) >= std::atoi(row.detail.c_str() + divider + 1)) row.detail = "FULL";
-        if (i == 3) { row.owned = number("economy_demolition_owned"); row.price = row.owned ? "RESERVED" : demo_price;
+        if (i == 3 && economy_mode) { row.owned = number("economy_demolition_owned"); row.price = row.owned ? "RESERVED" : demo_price;
             row.enabled = row.selected || row.owned || (buy_open && purchase_allowed && number("economy_demolition_available") && cash >= number("economy_demolition_price")); }
         roles.push_back(std::move(row));
     }
@@ -127,11 +130,12 @@ void EconomyView::Update(const rml_host_t& host, bool use_fixture, double second
     primary_none = attachment == "none"; primary_silencer = attachment == "silencer"; primary_reflex = attachment == "reflex";
     secondary_silencer = pistol_attachment == "silencer";
     suppressor_buy = has_class && (selected == "assault" || selected == "specops") && value("loadout_primary") != "mp44" &&
-        number("attach_allow_" + selected + "_silencer") && (number("economy_suppressor_primary_owned") || (buy_open && purchase_allowed && cash >= number("economy_suppressor_price")));
+        number("attach_allow_" + selected + "_silencer") && (!economy_mode || number("economy_suppressor_primary_owned") || (buy_open && purchase_allowed && cash >= number("economy_suppressor_price")));
     const bool reflex_free = number("economy_red_dot_free");
     reflex_buy = has_class && number("economy_red_dot_supported") && (number("economy_can_buy_red_dot") || number("economy_red_dot_owned") || reflex_free);
+    if (!economy_mode) reflex_buy = has_class && (selected == "assault" || selected == "specops") && number("attach_allow_" + selected + "_reflex") && value("loadout_primary") != "mp44" && value("loadout_primary") != "uzi";
     pistol_buy = has_class && value("loadout_secondary") != "deserteagle" && value("loadout_secondary") != "deserteaglegold" && number("attach_allow_pistol_silencer") &&
-        (number("economy_suppressor_secondary_owned") || (buy_open && purchase_allowed && cash >= number("economy_suppressor_price")));
+        (!economy_mode || number("economy_suppressor_secondary_owned") || (buy_open && purchase_allowed && cash >= number("economy_suppressor_price")));
     suppressor_price = number("economy_suppressor_primary_owned") ? "OWNED" : "$" + value("economy_suppressor_price");
     reflex_price = reflex_free ? "FREE" : number("economy_red_dot_owned") ? "OWNED" : "$" + value("economy_red_dot_price");
     pistol_price = (value("loadout_secondary") == "deserteagle" || value("loadout_secondary") == "deserteaglegold") ? "N/A" :
@@ -139,14 +143,14 @@ void EconomyView::Update(const rml_host_t& host, bool use_fixture, double second
     weapons.clear(); const int count = std::max(0, std::min(number("flat_primary_rows"), 7));
     for (int i=0; i<count; ++i) { EconomyOption row; const auto ref = value("flat_primary_" + std::to_string(i) + "_ref");
         row.key = std::to_string(i); row.detail = std::to_string(i + 1); row.name = WeaponName(ref); row.icon = icon(ref); row.enabled = has_class && !ref.empty(); row.selected = ref == value("loadout_primary");
-        row.state = row.selected ? "EQUIPPED" : "FREE";
+        row.state = row.selected ? "EQUIPPED" : economy_mode ? "FREE" : "";
         weapons.push_back(row); }
     pistols.clear();
-    for (const char* ref : pistol_keys) { EconomyOption row; row.key=ref; row.detail=std::to_string(pistols.size()+1); row.name=WeaponName(ref); row.icon=icon(ref); row.enabled=has_class && number("weap_allow_"+row.key); row.selected=row.key==value("loadout_secondary"); row.state=row.selected ? "EQUIPPED" : "FREE"; pistols.push_back(row); }
+    for (const char* ref : pistol_keys) { EconomyOption row; row.key=ref; row.detail=std::to_string(pistols.size()+1); row.name=WeaponName(ref); row.icon=icon(ref); row.enabled=has_class && number("weap_allow_"+row.key); row.selected=row.key==value("loadout_secondary"); row.state=row.selected ? "EQUIPPED" : economy_mode ? "FREE" : ""; pistols.push_back(row); }
     const int charges = number("economy_armor_charges"); armor_one = charges >= 1; armor_two = charges >= 2;
     armor_price = "$" + value("economy_armor_price"); armor_buy = has_class && number("economy_can_buy_armor");
     armor_refund = buy_open && purchase_allowed && number("economy_armor_refundable");
-    frag_owned = number("economy_frag_owned");
+    frag_owned = number(economy_mode ? "economy_frag_owned" : "weap_allow_frag_grenade");
     frag_price = "$" + value("economy_frag_price"); frag_buy = has_class && number("economy_can_buy_frag"); frag_refund = number("economy_frag_refundable");
     tactical = value("flat_utility_name"); camo = value("flat_camo_label"); repeat = number("economy_repeat_enabled");
     tactical_icon = icon(tactical == "SMOKE" ? "eq-smoke" : "eq-flash");
@@ -175,7 +179,7 @@ void EconomyView::Update(const rml_host_t& host, bool use_fixture, double second
         rebuy_rows[i].can_move_down = rebuy_supported && has_class && i + 1 < rebuy_rows.size();
     }
     rebuy_empty = rebuy_rows.empty();
-    feedback = value("flat_status"); deploy_label = buy_open ? "DEPLOY" : "SAVE & CLOSE";
+    feedback = value("flat_status"); deploy_label = !economy_mode ? "CONFIRM" : buy_open ? "DEPLOY" : "SAVE & CLOSE";
     mates.clear(); teammate_count = 0;
     for (int i=0; i<5; ++i) { const Rml::String prefix = "flat_mate_"+std::to_string(i)+"_"; EconomyOption row;
         row.key=std::to_string(i); row.name=value(prefix+"name"); row.detail=value(prefix+"class"); row.price=value(prefix+"cash");
@@ -218,6 +222,7 @@ bool EconomyView::Event(Rml::Event& event, const rml_host_t& host, bool use_fixt
         values.clear(); model.DirtyAllVariables(); return false;
     }
     if(event.GetType()=="mousedown" && event.GetParameter<int>("button",0)==1) {
+        if (!economy_mode) return false;
         const auto refund=control->GetAttribute<Rml::String>("data-refund", "");
         if((refund=="refund_armor" && armor_refund) || (refund=="refund_frag" && frag_refund) ||
             (buy_open && purchase_allowed && (refund=="refund_silencer" || refund=="refund_reflex" || refund=="refund_pistol_silencer"))) Submit(refund,host,use_fixture,seconds);
@@ -318,12 +323,12 @@ bool EconomyView::Shortcut(int key, const rml_host_t& host, bool use_fixture, do
         return false;
     }
     if (has_class && (key == 'c' || key == 'C')) { Submit("toggle_tactical",host,use_fixture,seconds); return true; }
-    if (has_class && (key == 'x' || key == 'X')) {
+    if (economy_mode && has_class && (key == 'x' || key == 'X')) {
         if (frag_buy) Submit("preview_frag",host,use_fixture,seconds);
         else if (frag_refund) Submit("refund_frag",host,use_fixture,seconds);
         return true;
     }
-    if (has_class && (key == 'z' || key == 'Z')) {
+    if (economy_mode && has_class && (key == 'z' || key == 'Z')) {
         if (armor_buy) Submit("buy_armor",host,use_fixture,seconds);
         else if (armor_refund) Submit("refund_armor",host,use_fixture,seconds);
         return true;

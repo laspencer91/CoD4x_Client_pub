@@ -33,3 +33,9 @@ Both source roots reload automatically after saves while the game is open. Share
 Keep native transport menu assets: they carry server open/close/confirmation semantics and provide compatibility fallback. The RML-enabled economy client displays the new menu by default (`r_rmlEconomy=1`); standard-mode and unavailable-host fallback remain supported. Do not duplicate purchase rules in a second live UI controller.
 
 Verification: all six CTests, including D3D9 economy controls, pass. The mod records dedicated server regression results and the parity audit in `docs/evidence/2026-11-07-new-buy-menu.md`. Desktop fixture checks do not establish multiplayer acceptance or frame-time performance.
+
+## Standard Promod variant (2026-11-07)
+
+The same economy document/controller also renders standard loadouts. The server publishes `flat_loadout_mode=standard` and `flat_loadout_ready=1`; the native adapter adopts that transport as well as live economy menus. Older economy servers retain their existing live flag behavior. `economy_mode` controls visibility; standard keeps cards/pickers/camo/tactical/team rows and hides prices, wallet, armor, gifts, rebuy and buy phase. Standard paid shortcuts are inactive and server paid/lab responses are rejected. Its primary action is CONFIRM, using the existing deploy/class acceptance route. `ui_flat_loadout=0` selects stock server menu routing; the existing `r_rmlEconomy` client setting controls adoption for both modes.
+
+Regular class limits and server equipment eligibility remain authoritative. Standard mode never applies the lab's forced slot limits or Demolition purchase confirmation. No second live controller or copied document was introduced. Changing mode clears stale hover help and pending UI state. The spectator HUD inventory is separate; a passive HUD path has not been implemented by this menu change.

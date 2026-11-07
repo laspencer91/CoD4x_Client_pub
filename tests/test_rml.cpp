@@ -186,6 +186,59 @@ int main(int argc, char** argv) {
         RmlHost_Shutdown(); RmlHost_SetSourceDirectory(nullptr); RmlHost_SetModSourceDirectory(nullptr);
         std::puts("RML_ECONOMY_CHECKS_PASSED"); return 0;
     }
+    if (argc > 1 && std::strcmp(argv[1], "--decrypt") == 0) {
+        fixture = false;
+        Require(RmlHost_Open(RML_SCREEN_PALETTE), "open palette with registered decrypt component");
+        Device gpu; gpu.clear_color = D3DCOLOR_ARGB(255, 38, 38, 40); gpu.Target(1280, 800);
+        auto* palette = Rml::GetContext("cod4x")->GetDocument(0);
+        auto* decrypt = palette->GetElementById("decrypt-probe");
+        Require(decrypt != nullptr, "actual decrypt-text element exists");
+        auto output = [&]() { return static_cast<Rml::ElementText*>(decrypt->QuerySelector(".decrypt-output")->GetChild(0))->GetText(); };
+        auto alphanumeric = [](char c) { return (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9'); };
+        decrypt->SetAttribute("text", "AB7"); decrypt->SetAttribute("cycles", 2); gpu.Render(100.0);
+        const float width = decrypt->GetBox().GetSize().x;
+        const auto first = output();
+        Require(first.size() == 1 && alphanumeric(first[0]) && first[0] != 'A', "first cycle contains only a non-final letter or digit");
+        gpu.Render(100.018); const auto second = output();
+        Require(second.size() == 1 && alphanumeric(second[0]) && second != first && second != "A", "second cycle is different and still alphanumeric");
+        gpu.Render(100.036); Require(output() == "A", "two-cycle character locks to its correct value");
+        gpu.Render(100.054); Require(output().size() == 2 && output()[0] == 'A' && alphanumeric(output()[1]), "locked prefix stays correct as the next character scrambles");
+        gpu.Render(100.162); Require(output() == "AB7" && !decrypt->IsClassSet("decrypting"), "the number and letters settle exactly");
+        Require(decrypt->GetBox().GetSize().x == width, "reserved final text keeps component width stable");
+        decrypt->SetAttribute("cycles", 3); decrypt->SetAttribute("replay", 1); gpu.Render(101.0);
+        const auto third_first = output(); gpu.Render(101.018); const auto third_second = output(); gpu.Render(101.036);
+        Require(output().size() == 1 && alphanumeric(output()[0]) && output() != "A" && output() != third_first && output() != third_second,
+            "three-cycle mode presents three distinct scramble characters");
+        gpu.Render(101.054); Require(output() == "A", "three-cycle character locks on the following tick");
+        const std::string literal = u8"GO / 7: \u00e9 <A&7>";
+        decrypt->SetAttribute("text", literal); gpu.Render(102.0); gpu.Render(104.0);
+        Require(output() == literal, "text changes preserve spaces, punctuation, Unicode and literal markup");
+        decrypt->SetAttribute("instant", true); decrypt->SetAttribute("text", "INSTANT 42"); gpu.Render(105.0);
+        Require(output() == "INSTANT 42", "instant mode shows final text without scrambling");
+        decrypt->RemoveAttribute("instant"); decrypt->SetAttribute("text", ""); gpu.Render(106.0);
+        Require(output().empty(), "empty text clears without stale output");
+        decrypt->SetAttribute("text", "SECURE THE SITE"); gpu.Render(107.0);
+        palette->GetElementById("decrypt-effects")->ScrollIntoView(); gpu.Render(107.001);
+        auto click = [&](const char* id) {
+            auto point = palette->GetElementById(id)->GetAbsoluteOffset(Rml::BoxArea::Border);
+            RmlHost_MouseMove(int(point.x + 20), int(point.y + 15)); RmlHost_Key(200, 1, 0); RmlHost_Key(200, 0, 0);
+        };
+        click("decrypt-speed"); gpu.Render(108.0);
+        Require(decrypt->GetAttribute<int>("tick-ms", 0) == 45, "slow preview control updates the component speed");
+        click("decrypt-speed"); gpu.Render(109.0);
+        Require(decrypt->GetAttribute<int>("tick-ms", 0) == 18, "speed control restores the rapid default");
+        gpu.Render(110.0); click("replay-decrypt"); gpu.Render(111.0);
+        Require(output().size() == 1, "mouse replay restarts a settled component");
+        gpu.Render(111.26);
+        Check(D3DXSaveSurfaceToFileA(RML_TEST_OUTPUT "/rml-decrypt-active.png", D3DXIFF_PNG, gpu.surface, nullptr, nullptr), "capture active decrypt component");
+        gpu.Render(113.0);
+        Require(output() == "SECURE THE SITE" && economy_requests.empty(), "decrypt settles without submitting gameplay actions");
+        Check(D3DXSaveSurfaceToFileA(RML_TEST_OUTPUT "/rml-decrypt-settled.png", D3DXIFF_PNG, gpu.surface, nullptr, nullptr), "capture settled decrypt component");
+        Require(RmlHost_Reload(), "reload a document containing the custom component"); gpu.Render(114.0);
+        Require(Rml::GetContext("cod4x")->GetDocument(0)->GetElementById("decrypt-probe") != nullptr, "custom component survives document replacement");
+        Require(warnings <= 1, "decrypt component loads without model or stylesheet warnings");
+        RmlHost_Shutdown(); return 0;
+    }
     if (argc > 1 && std::strcmp(argv[1], "--palette") == 0) {
         fixture = false;
         Require(RmlHost_Open(RML_SCREEN_PALETTE), "open palette as the first screen");

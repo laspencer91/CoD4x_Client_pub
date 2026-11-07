@@ -4,6 +4,7 @@
     <link type="text/rcss" href="shared/tokens.rcss" />
     <link type="text/rcss" href="shared/economy-kit.rcss" />
     <link type="text/rcss" href="shared/tactical.rcss" />
+    <link type="text/rcss" href="shared/decrypt-text.rcss" />
     <link type="text/rcss" href="palette.rcss" />
 </head>
 <body data-model="diagnostic" class="playing">
@@ -35,6 +36,13 @@
                 <div class="sample"><div class="label">15 / STAGGERED ROWS</div><div class="preview row-stage"><div class="stagger-row"><span>01</span> ASSAULT</div><div class="stagger-row stagger-second"><span>02</span> SPEC OPS</div><div id="stagger-probe" class="stagger-row stagger-third"><span>03</span> SCOPE</div></div><div class="recipe">.stagger-row / 500ms</div><div class="note">Short visual entry for score and squad rows. No stagger on live purchases.</div></div>
                 <div class="sample"><div class="label">16 / POWER ON</div><div class="preview"><div id="power-probe" class="power-on"><div class="eyebrow accent">COMMS</div><div class="large">CONNECTED</div><div class="muted">SIGNAL STABLE</div></div></div><div class="recipe">.power-on / 240ms</div><div class="note">One low-contrast flicker, then steady. Connection and equipment status.</div></div>
             </div>
+        </div>
+        <div id="decrypt-effects" class="kit-section decrypt-demo">
+            <div class="label">17 / DECRYPT TEXT</div>
+            <div class="preview"><div class="eyebrow muted">BRIEFING</div><decrypt-text id="decrypt-probe" class="large" text="SECURE THE SITE" tick-ms="18" cycles="3" glitch="glitch" /><div><decrypt-text class="decrypt-numbers" text="ROUND 04 / 250" tick-ms="18" cycles="2" /></div></div>
+            <div class="decrypt-controls"><input id="replay-decrypt" type="button" class="control" data-action="replay-decrypt" value="REPLAY DECRYPT" /><input id="decrypt-speed" type="button" class="control" data-action="decrypt-speed" value="SLOW PREVIEW" /></div>
+            <div class="recipe">&lt;decrypt-text text="SECURE THE SITE" tick-ms="18" cycles="3" glitch="glitch" /&gt;</div>
+            <div class="note">2-3 rapid letters or digits per character, then lock. Optional 1dp glitch; no symbols in the scramble.</div>
         </div>
         <div class="footer eyebrow">F7 ECONOMY PREVIEW / SAVE RML &amp; RCSS TO UPDATE / F9 MANUAL RELOAD / ESC CLOSE</div>
     </div>

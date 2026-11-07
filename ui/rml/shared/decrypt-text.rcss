@@ -1,0 +1,5 @@
+decrypt-text { display: inline-block; position: relative; white-space: pre; }
+decrypt-text .decrypt-reserve { display: block; white-space: pre; opacity: 0; }
+decrypt-text .decrypt-output { position: absolute; left: 0; top: 0; right: 0; overflow: hidden; clip: always; white-space: pre; pointer-events: none; }
+decrypt-text.decrypting .decrypt-output { color: var(--accent); }
+decrypt-text.decrypt-shift .decrypt-output { transform: translateX(1dp); }

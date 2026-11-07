@@ -3,6 +3,7 @@
 #include "d3d9_renderer.hpp"
 #include "source.hpp"
 #include "effects.hpp"
+#include "decrypt_text.hpp"
 #include "economy.hpp"
 #include "native_keys.h"
 #include <RmlUi/Core.h>
@@ -125,6 +126,17 @@ public:
         if (type != "click") return;
         const auto action = control->GetAttribute<Rml::String>("data-action", "");
         if (action == "close") { want_close = true; return; }
+        if (action == "replay-decrypt" || action == "decrypt-speed") {
+            if (action == "decrypt-speed") {
+                Rml::ElementList elements; document->GetElementsByTagName(elements, "decrypt-text");
+                for (auto* element : elements) element->SetAttribute("tick-ms", element->GetAttribute<int>("tick-ms", 18) == 18 ? 45 : 18);
+                const bool slow = !elements.empty() && elements.front()->GetAttribute<int>("tick-ms", 18) == 45;
+                control->SetAttribute("value", slow ? "NORMAL SPEED" : "SLOW PREVIEW");
+            }
+            ReplayDecryptText(document);
+            if (host.play_sound) host.play_sound("mouse_click");
+            return;
+        }
         if (action != "select" && action != "replay") return;
         if (host.play_sound) host.play_sound("mouse_click");
         ++activations;
@@ -173,6 +185,7 @@ extern "C" int RmlHost_Init(const rml_host_t* services) {
     Rml::SetSystemInterface(&system_interface); Rml::SetFileInterface(&file_interface); Rml::SetRenderInterface(&recorder);
     if (!Rml::Initialise()) return 0;
     RegisterEffects();
+    RegisterDecryptText();
     initialized = true;
     context = Rml::CreateContext("cod4x", {1280, 800});
     if (!context) { RmlHost_Shutdown(); return 0; }
@@ -207,6 +220,7 @@ extern "C" int RmlHost_Show() {
     }
     want_close = false; visible = true; focused_control.clear(); last_hover = now;
     document->Show();
+    ReplayDecryptText(document);
     // Resolve initial styles/layout before recording text and control geometry.
     context->Update();
     return 1;
@@ -323,7 +337,7 @@ extern "C" uint32_t RmlHost_Record(int width, int height, double seconds) {
     const bool resized = context->GetDimensions() != Rml::Vector2i(width, height);
     context->SetDimensions({width, height});
     context->SetDensityIndependentPixelRatio(std::max(0.5f, std::min(width / 1280.f, height / 800.f)));
-    if (want_replay && document) { document->SetClass("playing", false); context->Update(); document->SetClass("playing", true); want_replay = false; }
+    if (want_replay && document) { document->SetClass("playing", false); context->Update(); document->SetClass("playing", true); ReplayDecryptText(document); want_replay = false; }
     context->Update();
     if (resized) context->Update();
     recorder.Begin(width, height); context->Render(); auto frame = recorder.End();

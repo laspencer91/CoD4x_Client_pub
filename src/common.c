@@ -1687,6 +1687,16 @@ void Com_ReadCDKey()
 		RegCloseKey(hKey);
 	}
 
+#ifdef COD4X_TEST_ISOLATION
+	{
+		/* Test builds run from an isolated runtime that may have no Key Code: use a session-only one,
+		   generated in memory and never written to the registry. Release builds are unchanged. */
+		void CL_GenerateCDKey(char* key1234, char* key5);
+		CL_GenerateCDKey(cl_cdkey, cl_cdkey_checksum);
+		Com_Printf(CON_CHANNEL_SYSTEM, "Test build: using a session-only Key Code (not saved).\n");
+		return;
+	}
+#endif
 	memset(cl_cdkey, ' ', 16);
 	cl_cdkey[16] = '\0';
 	memset(cl_cdkey_checksum, ' ', 4);

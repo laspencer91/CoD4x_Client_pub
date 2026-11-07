@@ -177,8 +177,7 @@ void EconomyView::Update(const rml_host_t& host, bool use_fixture, double /*seco
         RebuyOption row; row.key = order[i];
         const auto saved = value("economy_repeat_" + row.key);
         if ((row.key == "attachment" && (saved.empty() || saved == "none")) || (row.key != "attachment" && std::atoi(saved.c_str()) <= 0)) continue;
-        row.name = row.key == "attachment" ? "WEAPON UPGRADE" : row.key == "frag" ? "FRAG" : "ARMOR";
-        if (row.key == "attachment") row.name = saved == "silencer" ? "SUPPRESSOR" : "RED DOT";
+        row.name = row.key == "attachment" ? (saved == "silencer" ? "SUPPRESSOR" : "RED DOT") : row.key == "frag" ? "FRAG" : "ARMOR";
         row.price = money(row.key == "attachment" ? (saved == "silencer" ? "economy_suppressor_price" : "economy_red_dot_price") : row.key == "frag" ? "economy_frag_price" : "economy_armor_price");
         rebuy_rows.push_back(row);
     }
@@ -308,6 +307,7 @@ bool EconomyView::Shortcut(int key, const rml_host_t& host, bool use_fixture, do
             Rml::ElementList buttons; if (panel) panel->QuerySelectorAll(buttons, ".picker-row input");
             int current = -1;
             for (size_t i=0; i<buttons.size(); ++i) if (buttons[i] == ui_context->GetFocusElement()) current=int(i);
+            if (current < 0 && key == RML_KEY_UPARROW) current = int(buttons.size()); // nothing focused: Up starts at the last row
             for (size_t i=0; i<buttons.size(); ++i) {
                 current = (current + (key == RML_KEY_DOWNARROW ? 1 : int(buttons.size())-1) + int(buttons.size())) % int(buttons.size());
                 if (!buttons[current]->HasAttribute("disabled")) { buttons[current]->Focus(); break; }

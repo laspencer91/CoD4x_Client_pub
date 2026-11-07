@@ -27,7 +27,7 @@ Rml::String TeamStyle(const Rml::String& allies, const Rml::String& axis) {
 }
 void BroadcastView::Reset() {
     context=nullptr; document=nullptr; model={}; players.clear(); values.Clear(); retry_at=0;
-    observer=compact=hidden=planted=false; last_visible_mode=CardMode::Expanded;
+    observer=compact=hidden=planted=armor_visible=false; armor_charges=0; last_visible_mode=CardMode::Expanded;
     team_factions.clear(); team_style.clear();
 }
 bool BroadcastView::Reload() {
@@ -35,7 +35,9 @@ bool BroadcastView::Reload() {
     auto* next=context->LoadDocument("ui/rml/broadcast.rml");
     if (!next) return false;
     if (document) document->Close();
-    document=next; document->Show(); MeasureCards(); return true;
+    document=next; document->Show(); MeasureCards();
+    if (model) model.DirtyAllVariables(); // card heights may have changed with the stylesheet
+    return true;
 }
 // Probes the stylesheet's card heights so stacking never hard-codes them.
 void BroadcastView::MeasureCards() {
@@ -67,8 +69,9 @@ bool BroadcastView::Prepare(const rml_host_t& host, int width, int height, doubl
 #undef ROW
         binding.RegisterArray<std::vector<BroadcastPlayer>>();
 #define BIND(field) binding.Bind(#field,&field)
-        BIND(players); BIND(left_score); BIND(right_score); BIND(clock); BIND(round); BIND(target);
+        BIND(players); BIND(left_score); BIND(right_score); BIND(clock); BIND(round); BIND(target); BIND(rounds);
         BIND(left_alive); BIND(right_alive); BIND(phase); BIND(observer); BIND(relative); BIND(team_style); BIND(compact); BIND(hidden); BIND(planted);
+        BIND(armor_visible); BIND(armor_charges);
         BIND(name_color8); BIND(name_color9); BIND(left_header_bottom); BIND(right_header_bottom);
 #undef BIND
         players.resize(10); left_header_bottom=right_header_bottom="0dp";
@@ -91,8 +94,11 @@ bool BroadcastView::Prepare(const rml_host_t& host, int width, int height, doubl
     // Observers use the scoreboard's faction colours; the stylesheet's team tokens remain the fallback.
     const Rml::String allies=observer ? value("rml_team_color_allies") : Rml::String(), axis=observer ? value("rml_team_color_axis") : Rml::String();
     if (allies+axis!=team_factions) { team_factions=allies+axis; team_style=TeamStyle(allies,axis); }
-    round=value("broadcast_round"); target=value("broadcast_target"); phase=value("broadcast_phase");
+    round=value("broadcast_round"); target=number("broadcast_target"); rounds=number("broadcast_rounds"); phase=value("broadcast_phase");
     planted=phase=="BOMB PLANTED"; name_color8=value("rml_name_color_8"); name_color9=value("rml_name_color_9");
+    // The local player's body armor (economy mode); the HUD shows one pip per charge of the two-charge vest.
+    armor_charges=std::max(0,std::min(number("economy_armor_charges"),2));
+    armor_visible=!observer && number("economy_armor_capacity")>0 && armor_charges>0;
     const int remaining=std::max(0,std::min(number("broadcast_seconds"),5999));
     clock=FormatClock(remaining,1);
     const auto follow=value("rml_follow_client");

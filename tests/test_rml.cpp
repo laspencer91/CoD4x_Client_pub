@@ -233,7 +233,25 @@ int main(int argc, char** argv) {
             Rml::ElementList scores; doc->QuerySelectorAll(scores,".score-value");
             Require(doc->QuerySelector(".match-score")->IsClassSet("relative") && scores.size()==2 &&
                 scores[0]->GetInnerRML()=="3" && scores[1]->GetInnerRML()=="12", "players see their own team's score on the left");
-            Require(!doc->QuerySelector(".alive-count") || !doc->QuerySelector(".alive-count")->IsVisible(), "player bar leaves alive counts to the stock counter");
+            Require(!doc->QuerySelector(".alive-count") || !doc->QuerySelector(".alive-count")->IsVisible(), "player bar omits alive counts");
+            economy_values["broadcast_target"]="0"; economy_values["broadcast_rounds"]="20"; gpu.Render(4.06);
+            {
+                auto shown=[](Rml::Element* element) { return element->GetComputedValues().display()!=Rml::Style::Display::None; };
+                Rml::ElementList parts; doc->QuerySelectorAll(parts,".round-strip > div > span");
+                Require(parts.size()==2 && shown(parts[0]) && !shown(parts[1]) && parts[0]->GetInnerRML().find("20")!=Rml::String::npos,
+                    "a round limit replaces the absent score target (Promod SD)");
+            }
+            Require(doc->QuerySelector(".armor-hud")->IsClassSet("depleted"), "armor HUD stays hidden without armor");
+            economy_values["economy_armor_capacity"]="2"; economy_values["economy_armor_charges"]="2"; gpu.Render(4.1); gpu.Render(4.5);
+            Rml::ElementList pips; doc->QuerySelectorAll(pips,".armor-pip");
+            Require(!doc->QuerySelector(".armor-hud")->IsClassSet("depleted") && pips.size()==2 && !pips[0]->IsClassSet("spent") && !pips[1]->IsClassSet("spent"),
+                "armor HUD shows one pip per charge");
+            economy_values["economy_armor_charges"]="1"; gpu.Render(4.6); gpu.Render(4.7);
+            auto* consumed=pips[1]->QuerySelector(".armor-fill");
+            Require(pips[1]->IsClassSet("spent") && consumed->GetComputedValues().opacity()>0.f && consumed->GetComputedValues().opacity()<1.f,
+                "a consumed charge animates out");
+            gpu.Render(5.2); gpu.Render(5.3);            Require(consumed->GetComputedValues().opacity()<0.01f && !pips[0]->IsClassSet("spent"), "the consumed pip settles empty beside the remaining charge");
+            Check(D3DXSaveSurfaceToFileA(RML_TEST_OUTPUT "/rml-broadcast-armor.png",D3DXIFF_PNG,gpu.surface,nullptr,nullptr),"capture armor HUD");
             Check(D3DXSaveSurfaceToFileA(RML_TEST_OUTPUT "/rml-broadcast-player.png",D3DXIFF_PNG,gpu.surface,nullptr,nullptr),"capture player score bar");
         }
         Require(!doc->QuerySelector(".roster")->IsVisible(), "ordinary player mode has no private observer roster");

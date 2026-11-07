@@ -30,6 +30,8 @@ BroadcastView broadcast;
 bool broadcast_enabled=false, broadcast_ready=false;
 bool economy_screen = false, economy_preview = false;
 bool game_fonts_loaded = false;
+bool game_font_loaded[3] = {};
+double game_fonts_retry_at = 0;
 uint32_t source_reloads = 0, source_failures = 0;
 
 class System final : public Rml::SystemInterface {
@@ -196,10 +198,21 @@ using namespace cod4x::rml;
 namespace {
 bool LoadGameFonts() {
     if (game_fonts_loaded) return true;
-    if (!Rml::LoadFontFace("ui/rml/fonts/SairaCondensed-Regular.ttf") ||
-        !Rml::LoadFontFace("ui/rml/fonts/SairaCondensed-SemiBold.ttf", false, Rml::Style::FontWeight::Bold) ||
-        !Rml::LoadFontFace("ui/rml/fonts/ShareTechMono-Regular.ttf")) return false;
-    game_fonts_loaded=true; return true;
+    // Missing fonts (a mod without rml_shared.iwd) are retried every few seconds, not every frame, and a face that
+    // already loaded is never registered twice.
+    const double now = Rml::GetSystemInterface()->GetElapsedTime();
+    if (now < game_fonts_retry_at) return false;
+    const struct { const char* path; Rml::Style::FontWeight weight; } fonts[] = {
+        {"ui/rml/fonts/SairaCondensed-Regular.ttf", Rml::Style::FontWeight::Auto},
+        {"ui/rml/fonts/SairaCondensed-SemiBold.ttf", Rml::Style::FontWeight::Bold},
+        {"ui/rml/fonts/ShareTechMono-Regular.ttf", Rml::Style::FontWeight::Auto}};
+    game_fonts_loaded = true;
+    for (int i = 0; i < 3; ++i) {
+        if (!game_font_loaded[i]) game_font_loaded[i] = Rml::LoadFontFace(fonts[i].path, false, fonts[i].weight);
+        game_fonts_loaded = game_fonts_loaded && game_font_loaded[i];
+    }
+    if (!game_fonts_loaded) game_fonts_retry_at = now + 5;
+    return game_fonts_loaded;
 }
 }
 extern "C" void RmlHost_EnableBroadcast(int enabled) { broadcast_enabled=enabled!=0; if (!enabled) broadcast_ready=false; }
@@ -240,7 +253,8 @@ extern "C" void RmlHost_Shutdown() {
     context = nullptr; document = nullptr; initialized = false; model = {};
     document_path = "ui/rml/diagnostic.rml"; want_replay = false;
     economy_screen = economy_preview = false;
-    game_fonts_loaded = false;
+    game_fonts_loaded = false; game_fonts_retry_at = 0;
+    for (bool& loaded : game_font_loaded) loaded = false;
 }
 
 extern "C" int RmlHost_Show() {
@@ -276,12 +290,14 @@ extern "C" void RmlHost_Hide() {
 }
 extern "C" int RmlHost_Visible() { return visible && !want_close; }
 
-extern "C" int RmlHost_Reload() {
+// Reloads the menu document, and the passive HUD when include_hud is set (F9 / rml_reload). Switching screens
+// reloads only the menu, so a HUD authoring error can never block the buy menu.
+static int ReloadDocuments(bool include_hud) {
     if (!context) return 0;
     const bool was_visible = visible;
     Rml::Factory::ClearStyleSheetCache(); Rml::Factory::ClearTemplateCache();
     Rml::ReleaseTextures(&recorder);
-    const bool hud_ok=broadcast.Reload();
+    const bool hud_ok=include_hud ? broadcast.Reload() : true;
     if (!document && !visible) return hud_ok;
     RmlHost_Hide();
     auto* replacement = context->LoadDocument(document_path);
@@ -298,6 +314,7 @@ extern "C" int RmlHost_Reload() {
     const bool menu_ok=was_visible ? RmlHost_Show()!=0 : true;
     return menu_ok && hud_ok;
 }
+extern "C" int RmlHost_Reload() { return ReloadDocuments(true); }
 
 extern "C" int RmlHost_Open(rml_screen_t screen) {
     if (!context) return 0;
@@ -314,7 +331,7 @@ extern "C" int RmlHost_Open(rml_screen_t screen) {
     if (std::strcmp(document_path, path)) {
         const char* previous = document_path;
         document_path = path;
-        if (!RmlHost_Reload()) { document_path = previous; economy_screen = previous_economy; economy_preview = previous_preview; return 0; }
+        if (!ReloadDocuments(false)) { document_path = previous; economy_screen = previous_economy; economy_preview = previous_preview; return 0; }
     }
     // Entrance animations play on every open, not only the first document load.
     if (!visible) want_replay = true;

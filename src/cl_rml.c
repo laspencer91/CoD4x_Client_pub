@@ -119,6 +119,9 @@ void CL_Rml_Disconnect(void)
 {
     CL_Rml_Hide(); RmlHost_EnableBroadcast(0);
     Cvar_SetStringByName("broadcast_active","0"); Cvar_SetStringByName("ui_rml_broadcast_drawn","0");
+    /* Server-published state that gates the local open and the HUD must not carry over to the next server. */
+    Cvar_SetStringByName("flat_economy_live","0"); Cvar_SetStringByName("flat_loadout_ready","0");
+    Cvar_SetStringByName("economy_armor_charges","0");
 }
 
 static qboolean CL_Rml_Show(rml_screen_t screen)
@@ -204,7 +207,7 @@ void CL_Rml_MenuOpened(menuDef_t *menu)
     if (i == 4 || (i && !rml_menus[0].menu)) return;
     if (!i) {
         if (rml_local_open_at) {
-            Com_Printf(CON_CHANNEL_UI, "RmlUi: server menu arrived %d ms after the buy key\n", Sys_Milliseconds() - rml_buy_key_at);
+            if (Cvar_GetInt("developer")) Com_Printf(CON_CHANNEL_UI, "RmlUi: server menu arrived %d ms after the buy key\n", Sys_Milliseconds() - rml_buy_key_at);
             rml_local_open_at = 0;
         } else if (!(rml_captured && RmlHost_Visible())) {
             RmlHost_EconomyDialog(0);
@@ -348,7 +351,7 @@ void CL_Rml_Frame(void)
     }
     if (rml_menus[0].menu && !rml_economy->boolean) CL_Rml_Hide();
     {
-        const int draw_hud=rml_enabled && rml_enabled->boolean && rml_broadcast->boolean &&
+        const int draw_hud=clientUIActives.state == CA_ACTIVE && rml_enabled && rml_enabled->boolean && rml_broadcast->boolean &&
             Cvar_GetInt("broadcast_active") && Cvar_GetInt("cg_draw2D") && !cg.inKillCam && !uiMem.uiInfo.uiDC.openMenuCount && !(clientUIActives.keyCatchers & KEYCATCH_CONSOLE);
         if (draw_hud) CL_Rml_EnsureHost();
         RmlHost_EnableBroadcast(draw_hud);
@@ -362,7 +365,7 @@ void CL_Rml_Frame(void)
     queued=ticket && R_QueueRmlFrame(ticket);
     if (queued && rml_first_frame_pending) {
         rml_first_frame_pending = qfalse;
-        Com_Printf(CON_CHANNEL_UI, "RmlUi: first frame %d ms after the buy key\n", Sys_Milliseconds() - rml_buy_key_at);
+        if (Cvar_GetInt("developer")) Com_Printf(CON_CHANNEL_UI, "RmlUi: first frame %d ms after the buy key\n", Sys_Milliseconds() - rml_buy_key_at);
     }
     Cvar_SetStringByName("ui_rml_broadcast_drawn",queued && RmlHost_BroadcastReady() ? "1" : "0");
     if (ticket && !queued) RmlHost_Discard(ticket);

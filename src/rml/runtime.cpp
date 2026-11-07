@@ -245,16 +245,19 @@ extern "C" int RmlHost_Show() {
     return 1;
 }
 
-extern "C" void RmlHost_Hide() {
-    visible = false; want_close = false;
+extern "C" void RmlHost_ClearInput() {
     if (context) {
+        context->ProcessMouseLeave();
         for (auto key : pressed_keys) context->ProcessKeyUp(key, 0);
         for (int button = 0; button < 5; ++button) if (pressed_buttons[button]) context->ProcessMouseButtonUp(button, 0);
     }
     pressed_keys.clear(); std::fill(std::begin(pressed_buttons), std::end(pressed_buttons), false);
-    if (document) document->Hide();
-    if (context) context->ProcessMouseLeave();
     focused_control.clear();
+}
+extern "C" void RmlHost_Hide() {
+    visible = false; want_close = false;
+    RmlHost_ClearInput();
+    if (document) document->Hide();
 }
 extern "C" int RmlHost_Visible() { return visible && !want_close; }
 

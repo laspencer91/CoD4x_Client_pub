@@ -52,7 +52,7 @@ private:
     int previous_cash = -1;
     Rml::String held_gift;
     Rml::String hovered;
-    double last_hover = -1;
+    double last_hover = -1, silent_hover_until = -1;
     Rml::String Value(const rml_host_t&, const Rml::String&, bool);
     bool Submit(const Rml::String&, const rml_host_t&, bool, double);
 };

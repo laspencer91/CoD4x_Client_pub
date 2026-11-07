@@ -301,7 +301,7 @@ LONG WINAPI MainWndProc(
 
 	case WM_KILLFOCUS:
 #ifdef COD4X_RMLUI
-        CL_Rml_Hide();
+        CL_Rml_FocusLost();
 #endif
 
 		if(r_autopriority && r_autopriority->boolean){

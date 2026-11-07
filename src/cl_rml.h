@@ -5,6 +5,7 @@
 void CL_Rml_Init(void);
 void CL_Rml_Shutdown(void);
 void CL_Rml_Hide(void);
+void CL_Rml_FocusLost(void);
 void CL_Rml_Frame(void);
 int CL_Rml_KeyEvent(int key, int down);
 int CL_Rml_CharEvent(unsigned int value);

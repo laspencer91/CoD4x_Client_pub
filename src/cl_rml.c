@@ -62,6 +62,14 @@ void CL_Rml_Hide(void)
     }
 }
 
+void CL_Rml_FocusLost(void)
+{
+    if (!rml_menus[0].menu) { CL_Rml_Hide(); return; }
+    RmlHost_ClearInput();
+    rml_modifiers = 0;
+    CL_ShowSystemCursor(1);
+}
+
 static qboolean CL_Rml_Show(rml_screen_t screen)
 {
     POINT cursor;
@@ -95,6 +103,14 @@ static void CL_Rml_EconomyPreview_f(void) { CL_Rml_RestoreMenus(); RmlHost_Econo
 static int CL_Rml_Response(const char *response)
 {
     if (!rml_menus[0].menu || rml_response[0] || !RmlHost_ActionAllowed(response)) return 0;
+    /* Match the stock picker: preview the selected weapon immediately. */
+    if (!strncmp(response, "pick_primary:", 13) && strlen(response) == 14) {
+        char key[40];
+        Com_sprintf(key, sizeof(key), "flat_primary_%c_ref", response[13]);
+        if (Cvar_GetString(key)[0]) Cvar_SetStringByName("loadout_primary", Cvar_GetString(key));
+    } else if (!strncmp(response, "secondary:", 10)) {
+        Cvar_SetStringByName("loadout_secondary", response + 10);
+    }
     Q_strncpyz(rml_response, response, sizeof(rml_response));
     return 1;
 }
@@ -230,13 +246,13 @@ void CL_Rml_Frame(void)
         }
     }
     if (rml_menus[0].menu && !rml_economy->boolean) CL_Rml_Hide();
-    if (!rml_enabled || !rml_enabled->boolean || !IN_AppActive() || !RmlHost_Visible()) {
+    if (!rml_enabled || !rml_enabled->boolean || !RmlHost_Visible()) {
         if (rml_captured) CL_Rml_Hide();
         return;
     }
     ticket = RmlHost_Record(_vidConfig.displayWidth, _vidConfig.displayHeight, Sys_Milliseconds() / 1000.0);
     if (ticket && !R_QueueRmlFrame(ticket)) RmlHost_Discard(ticket);
-    if (ticket && !(clientUIActives.keyCatchers & KEYCATCH_CONSOLE) && rml_cursor && !Material_IsDefault(rml_cursor)) {
+    if (ticket && IN_AppActive() && !(clientUIActives.keyCatchers & KEYCATCH_CONSOLE) && rml_cursor && !Material_IsDefault(rml_cursor)) {
         const float size = 32.0f * _vidConfig.displayHeight / 480.0f;
         /* ui_cursor's arrow tip is at the centre of its transparent texture. */
         R_AddCmdDrawStretchPic(rml_cursor_x - size * 0.5f, rml_cursor_y - size * 0.5f,
@@ -260,7 +276,7 @@ int CL_Rml_KeyEvent(int key, int down)
         return 1;
     }
 #endif
-    if (!rml_captured || !RmlHost_Visible()) return 0;
+    if (!IN_AppActive() || !rml_captured || !RmlHost_Visible()) return 0;
     if (key == RML_KEY_F9) {
         if (down) CL_Rml_Reload_f();
         return 1;
@@ -276,14 +292,14 @@ int CL_Rml_KeyEvent(int key, int down)
 
 int CL_Rml_CharEvent(unsigned int value)
 {
-    if (!rml_captured || !RmlHost_Visible() || (clientUIActives.keyCatchers & KEYCATCH_CONSOLE)) return 0;
+    if (!IN_AppActive() || !rml_captured || !RmlHost_Visible() || (clientUIActives.keyCatchers & KEYCATCH_CONSOLE)) return 0;
     RmlHost_Text(value);
     return 1;
 }
 
 int CL_Rml_MouseEvent(int x, int y)
 {
-    if (!rml_captured || !RmlHost_Visible() || (clientUIActives.keyCatchers & KEYCATCH_CONSOLE)) return 0;
+    if (!IN_AppActive() || !rml_captured || !RmlHost_Visible() || (clientUIActives.keyCatchers & KEYCATCH_CONSOLE)) return 0;
     RmlHost_MouseMove(x, y);
     rml_cursor_x = x; rml_cursor_y = y;
     CL_ShowSystemCursor(!rml_cursor || Material_IsDefault(rml_cursor));

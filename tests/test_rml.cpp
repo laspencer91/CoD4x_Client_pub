@@ -305,6 +305,9 @@ int main(int argc, char** argv) {
         RmlHost_Key('4',1,0); RmlHost_Key('4',0,0); gpu.Render(14.2);
         Require(economy_requests.back()=="select:demolitions", "standard Demolition uses normal class selection");
         Check(D3DXSaveSurfaceToFileA(RML_TEST_OUTPUT "/rml-standard-loadout.png", D3DXIFF_PNG, gpu.surface, nullptr, nullptr), "capture shared standard class menu");
+        economy_values["flat_has_class"]="0"; gpu.Render(15.0);
+        Require(restored_doc->QuerySelector(".unselected-loadout")->IsVisible() &&
+            !restored_doc->QuerySelector(".primary-card")->IsVisible(), "initial class choice shows a prompt instead of empty weapon cards");
         Require(warnings==0, "economy parses without model or stylesheet diagnostics");
         RmlHost_Shutdown(); RmlHost_SetSourceDirectory(nullptr); RmlHost_SetModSourceDirectory(nullptr);
         std::puts("RML_ECONOMY_CHECKS_PASSED"); return 0;
@@ -494,6 +497,10 @@ int main(int argc, char** argv) {
         RmlHost_Key(RML_KEY_MOUSE1, 1, 0); RmlHost_FocusLost(); Require(!RmlHost_Visible(), "hide while pointer is held");
         Require(RmlHost_Show(), "reopen after capture loss"); RmlHost_Key(RML_KEY_MOUSE1, 0, 0);
         RmlHost_Stats(&state); Require(state.activations == 2, "release after focus loss cannot activate a stale control");
+        RmlHost_MouseMove(960, 465); RmlHost_Key(RML_KEY_MOUSE1, 1, 0);
+        RmlHost_ClearInput(); Require(RmlHost_Visible(), "input release preserves a visible adopted menu");
+        RmlHost_Key(RML_KEY_MOUSE1, 0, 0); RmlHost_Stats(&state);
+        Require(state.activations == 2, "input release cancels the held click without activating it");
         RmlHost_Key(RML_KEY_ESCAPE, 1, 0); Require(!RmlHost_Record(1280, 800, 1.3), "Escape stops recording");
         Require(RmlHost_Show(), "reopen after Escape");
         for (int i = 0; i < 12; ++i) RmlHost_Record(1280, 800, 2.0 + i * .01);

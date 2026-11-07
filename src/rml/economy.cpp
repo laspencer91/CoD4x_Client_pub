@@ -75,7 +75,7 @@ void EconomyView::Reset() {
     model = {}; ui_context = nullptr; pending_focus = 0;
     values.clear(); roles.clear(); weapons.clear(); pistols.clear(); mates.clear(); rebuy_rows.clear();
     preview_state.Reset();
-    held_gift.clear(); held_rebuy.clear(); hovered.clear(); last_hover = -1;
+    held_gift.clear(); held_rebuy.clear(); hovered.clear(); last_hover = silent_hover_until = -1;
     previous_cash = -1; pending = confirmation = primary_picker = pistol_picker = false;
 }
 void EconomyView::Dialog(bool value) { confirmation = value; primary_picker = pistol_picker = false; pending_focus = 0; if (model) model.DirtyVariable("confirmation"); }
@@ -235,12 +235,13 @@ bool EconomyView::Event(Rml::Event& event, const rml_host_t& host, bool use_fixt
     if(event.GetType()=="mouseover" || event.GetType()=="focus") {
         if (event.GetType()=="mouseover" && (action=="primary" || action=="secondary") && !control->HasAttribute("disabled")) control->Focus();
         const auto identity=action+control->GetAttribute<Rml::String>("data-value", "")+control->GetAttribute<Rml::String>("data-token", "");
-        if(identity!=hovered) {hovered=identity;if(seconds-last_hover>=0.075 && host.play_sound){host.play_sound("mouse_over");last_hover=seconds;}}
+        if(identity!=hovered) {hovered=identity;if(event.GetType()=="mouseover" && seconds>=silent_hover_until && seconds-last_hover>=0.075 && host.play_sound){host.play_sound("mouse_over");last_hover=seconds;}}
         focus_body=control->GetAttribute<Rml::String>("data-help", "");
         model.DirtyVariable("focus_body"); return false;
     }
     if(control->HasAttribute("disabled")) return false;
     if(event.GetType()!="click") return false;
+    silent_hover_until = seconds + 0.35;
     if(host.play_sound) host.play_sound("mouse_click");
     if(action=="primary-picker") {TogglePicker(true);return false;}
     if(action=="pistol-picker") {TogglePicker(false);return false;}

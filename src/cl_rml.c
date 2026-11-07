@@ -9,6 +9,7 @@
 #include "cl_rml.h"
 #include "rml/rml_host.h"
 #include "rml/native_keys.h"
+#include "win_sys.h"
 #include <stdlib.h>
 
 /* The native mouse route uses bit 0x10 for modal menus. */
@@ -20,6 +21,8 @@ static int rml_previous_catcher, rml_modifiers;
 static struct { menuDef_t *menu; int item_count; } rml_menus[4];
 static char rml_response[96];
 static int rml_retry_at;
+static Material *rml_cursor;
+static int rml_cursor_x, rml_cursor_y;
 #ifdef COD4X_TEST_ISOLATION
 static int rml_test_x = -1, rml_test_y, rml_test_button, rml_test_deadline;
 static void CL_Rml_TestClick_f(void)
@@ -55,12 +58,13 @@ void CL_Rml_Hide(void)
         Key_SetCatcher((clientUIActives.keyCatchers & ~RML_MENU_CATCHER) | rml_previous_catcher);
         rml_captured = qfalse;
         rml_modifiers = 0;
-        CL_ShowSystemCursor(0);
+        CL_ShowSystemCursor(IN_AppActive() ? 0 : 1);
     }
 }
 
 static qboolean CL_Rml_Show(rml_screen_t screen)
 {
+    POINT cursor;
     const rml_host_t host = {FS_ReadFile, FS_FreeFile, CL_Rml_Log, CL_Rml_Sound, CL_Rml_Time, Cvar_GetString, CL_Rml_Response};
     if (!RmlHost_Init(&host) || !RmlHost_Open(screen)) {
         CL_Rml_Hide();
@@ -68,6 +72,12 @@ static qboolean CL_Rml_Show(rml_screen_t screen)
         return qfalse;
     }
     Cvar_SetBool(rml_enabled, qtrue);
+    rml_cursor = Material_RegisterHandle("ui_cursor", 3);
+    if (GetCursorPos(&cursor) && ScreenToClient(g_wv.hWnd, &cursor)) {
+        rml_cursor_x = cursor.x; rml_cursor_y = cursor.y;
+        RmlHost_MouseMove(cursor.x, cursor.y);
+    }
+    CL_ShowSystemCursor(!rml_cursor || Material_IsDefault(rml_cursor));
     if (!rml_captured) {
         Key_ClearStates(0);
         rml_previous_catcher = clientUIActives.keyCatchers & RML_MENU_CATCHER;
@@ -179,6 +189,7 @@ void CL_Rml_Init(void)
 void CL_Rml_Shutdown(void)
 {
     CL_Rml_Hide();
+    rml_cursor = NULL;
     R_SyncRenderThread();
     RmlHost_Shutdown();
 }
@@ -225,6 +236,13 @@ void CL_Rml_Frame(void)
     }
     ticket = RmlHost_Record(_vidConfig.displayWidth, _vidConfig.displayHeight, Sys_Milliseconds() / 1000.0);
     if (ticket && !R_QueueRmlFrame(ticket)) RmlHost_Discard(ticket);
+    if (ticket && !(clientUIActives.keyCatchers & KEYCATCH_CONSOLE) && rml_cursor && !Material_IsDefault(rml_cursor)) {
+        const float size = 32.0f * _vidConfig.displayHeight / 480.0f;
+        /* ui_cursor's arrow tip is at the centre of its transparent texture. */
+        R_AddCmdDrawStretchPic(rml_cursor_x - size * 0.5f, rml_cursor_y - size * 0.5f,
+            size, size, 0, 0, 1, 1, colorWhite, rml_cursor);
+        CL_ShowSystemCursor(0);
+    }
     if (!RmlHost_Visible()) CL_Rml_Hide();
 }
 
@@ -267,6 +285,7 @@ int CL_Rml_MouseEvent(int x, int y)
 {
     if (!rml_captured || !RmlHost_Visible() || (clientUIActives.keyCatchers & KEYCATCH_CONSOLE)) return 0;
     RmlHost_MouseMove(x, y);
-    CL_ShowSystemCursor(1);
+    rml_cursor_x = x; rml_cursor_y = y;
+    CL_ShowSystemCursor(!rml_cursor || Material_IsDefault(rml_cursor));
     return 1;
 }

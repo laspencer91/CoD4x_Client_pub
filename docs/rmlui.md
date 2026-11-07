@@ -77,6 +77,8 @@ The filesystem copies a packaged file into its own memory before returning, rele
 
 The input boundary uses CoD4's actual event numbers from `win_wndproc.c::s_scantokey`, including navigation, keypad keys and modifiers. The older generic Quake `keycodes.h` values agree for Tab/Enter/mouse but differ for several special keys. F9 is handled explicitly while modal input is captured so that manual reload remains usable. The private `TEST_ISOLATION` client also routes F8 before the native menu can consume it. Console priority is checked before either shortcut. Host elapsed time is refreshed before opening a screen so a previously hidden UI starts its entrance on the current client clock.
 
+While an RML screen owns input, the engine adapter draws the game's `ui_cursor` material after the RML frame and before the console. It uses physical mouse coordinates, uniform height-based scaling and the texture's centre hotspot. Opening a screen initializes its pointer position from the OS cursor. The Windows pointer is hidden while the game cursor is available; a missing material falls back to the system pointer. Losing application focus releases capture and restores the Windows pointer. This belongs to the game adapter, so standalone RML fixtures do not draw a game cursor. See [native cursor evidence](evidence/2026-11-06-rml-cursor.md).
+
 The diagnostic proves the first supported visual subset: surfaces, solid/vertex-gradient fills, text, images, rectangular clipping, transforms and basic motion. Layer filters, stencil masks, named shader effects, particles and scene-background blur are subsequent work; they are not supplied by this initial backend.
 
 ## Verification status on 2026 11 06

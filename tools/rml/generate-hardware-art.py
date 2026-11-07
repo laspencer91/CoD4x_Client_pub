@@ -24,3 +24,10 @@ for y in range(64):
         alpha = fade * (.06 + .22 * core + (.08 if y % 4 == 0 else 0))
         holo.putpixel((x, y), (217, 186, 112, round(255 * alpha)))
 holo.save(output / 'deploy-field.tga', compression=None)
+
+shadow = Image.new('RGBA', (128, 64))
+for y in range(64):
+    for x in range(128):
+        radius = ((x - 63.5) / 63.5) ** 2 + ((y - 31.5) / 31.5) ** 2
+        shadow.putpixel((x, y), (0, 0, 0, round(140 * max(0, 1 - radius) ** 2)))
+shadow.save(output / 'weapon-shadow.tga', compression=None)

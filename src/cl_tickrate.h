@@ -4,6 +4,8 @@
 #include "client.h"
 
 /* Engine glue for the high-rate client; the testable logic is in cl_tickrate_core. */
+/* Registers a ROM userinfo value a server checks before admitting this client. */
+void CL_RegisterCapability(const char *name, int value, int min, int max, const char *description);
 void CL_Tickrate_Patch(void);                 /* Patch_Other: hook native CL_GetSnapshot */
 void CL_Tickrate_Init(void);                  /* CL_InitOnceForAllClients, after Patch */
 void CL_Tickrate_Clear(void);                 /* CL_ClearState */

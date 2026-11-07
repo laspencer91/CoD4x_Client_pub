@@ -20,12 +20,14 @@ or time goes backwards.
 The dedicated server registers `recoil_model`, default 0. Set it before the first map;
 the first successful selection locks for the process lifetime. Restart the process to
 change it. `recoil_status` lists the requested/effective selection, protocol, supported
-model mask and contract fingerprint. Model IDs are permanent: 0/native, 1/continuous;
+model mask and published contract. Model IDs are permanent: 0/native, 1/continuous;
 a later model receives a new ID rather than changing model 1's meaning.
 
 `src/recoil/model.h` is the canonical engine-free C core and contract decoder.
-`tools/sync-recoil.py` synchronizes the tracked server core, shared C/Python validation
-corpus and the mod-owned Python validator mirrored into release tooling. Run `--check`
+`model.h` is also the single source for every limit and model ID: `tools/sync-recoil.py`
+generates the Python tooling's `recoil_constants.py` from it, and synchronizes the tracked
+server core, shared C/Python validation corpus and the mod-owned Python validator mirrored
+into release tooling. Run `--check`
 when testing/building a matched set, or select repos with `--server`, `--mod`, `--release`.
 Set `RECOIL_SERVER_SOURCE` in CMake to enable the `recoil_sync` CTest. Do not edit mirrors.
 The normal client build includes `cl_recoil.c` and its hook; the server makefile discovers
@@ -35,22 +37,19 @@ The normal client build includes `cl_recoil.c` and its hook; the server makefile
 
 The server publishes one protected `sv_recoilContract` systeminfo value, containing
 both model and all profile values. A client's local configuration is not an input.
-The client reads the raw configstring, validates the complete value, rejects unsupported
-models and acknowledges its fingerprint in ROM/userinfo `cl_recoilAck`.
+The client reads it from the gamestate, validates the complete value and disconnects
+itself if it cannot apply the model.
 
 ROM/userinfo `cl_recoilProtocol` identifies the contract reader; `cl_recoilModels` is
-the bitmask of **fully integrated** gameplay models. Both currently advertise only
-native gameplay (mask 1). Protocol support alone is insufficient. Connection checks
-use capabilities; world entry and active userinfo changes also require the effective
-contract acknowledgement when a non-native model is active. A pending or old acknowledgement
-holds a capable client in the primed state; active userinfo mismatches reject it. Native servers permit
-legacy clients without those fields. Without a contract (any other server) the client keeps native
+the bitmask of models the client applies (3 with the hook installed, otherwise 1).
+Protocol support alone is insufficient. When a non-native model is active the server
+checks these capabilities on connect, world entry and userinfo changes. The client
+cannot enter the world before it has the gamestate, which carries the contract, and the
+contract is locked for the server process, so no separate acknowledgement is needed.
+Native servers permit legacy clients without those fields. Without a contract (any other server) the client keeps native
 recoil, except as a listen-server host: the stock listen server publishes nothing, so the host reads
 `recoil_model` and `recoil/model_<id>.profile` itself, once per game, like a dedicated server does.
 Model-1 admission on a dedicated CoD4x server has not been exercised in a multiplayer session.
-
-The 64-bit fingerprint is a compact consistency check, not authentication or a proof
-of client code integrity.
 
 ## Profiles and continuous model
 
@@ -86,8 +85,8 @@ a burst after a 2.5 s pause opens at 25% again. Frame quantization (88 ms betwee
 
 1. Add its permanent descriptor and model-specific validation/dispatch in the shared
    core. Extend/version the payload if its parameter shape differs; retain old decoders.
-2. Add its mod profile and manifest entry; update/check profile hashes with
-   `tools/update-recoil-manifest.py` in the mod repository.
+2. Add its mod profile and catalog entry; check them with `tools/check-recoil-catalog.py`
+   in the mod repository.
 3. Apply it in `CL_Recoil_FireRecoil` (one call per fired shot). Keep weapon switching,
    respawn and time-wrap rules explicit.
 4. Run the core/policy tests and an in-game check, then set its registry `integrated` flag,

@@ -1,5 +1,6 @@
 #include "client.h"
 #include "cl_recoil.h"
+#include "cl_tickrate.h"
 #include "sys_patch.h"
 #include "xassets/weapondef.h"
 #include "xzone.h"
@@ -15,7 +16,7 @@ void CL_Recoil_Stub_FireRecoil(void);
 void CL_Recoil_NativeFireRecoil(const playerState_t *ps, float *kick, float *gunKick);
 
 static qboolean hooked;
-static cvar_t *activeModel, *ack;
+static cvar_t *activeModel;
 static recoil_contract_t active;
 static recoil_state_t shot;      /* the local player's current weapon */
 static unsigned shotWeapon;
@@ -81,13 +82,10 @@ void CL_Recoil_FireRecoil(const playerState_t *ps, float *kick, float *gunKick)
     }
 }
 
-static void Activate(const recoil_contract_t *contract, const char *wire)
+static void Activate(const recoil_contract_t *contract)
 {
-    char fingerprint[17];
-    Recoil_Fingerprint(wire, fingerprint);
     active = *contract;
     Cvar_SetInt(activeModel, contract->model);
-    Cvar_SetString(ack, fingerprint);
 }
 
 void CL_Recoil_Clear(void)
@@ -96,20 +94,14 @@ void CL_Recoil_Clear(void)
     Recoil_Decode(RECOIL_NATIVE_WIRE, &active);
     memset(&shot, 0, sizeof(shot));
     Cvar_SetInt(activeModel, 0);
-    Cvar_SetString(ack, "");
 }
 
 void CL_Recoil_Init(void)
 {
-    cvar_t *protocol = Cvar_RegisterInt("cl_recoilProtocol", RECOIL_PROTOCOL, 0, RECOIL_PROTOCOL,
-        CVAR_ROM | CVAR_USERINFO, "Recoil contract protocol (not gameplay model support)");
-    cvar_t *models = Cvar_RegisterInt("cl_recoilModels", SupportedModels(), 0, 0x7fffffff,
-        CVAR_ROM | CVAR_USERINFO, "Bitmask of integrated recoil models");
-    Cvar_SetInt(protocol, RECOIL_PROTOCOL);
-    Cvar_SetInt(models, SupportedModels());
+    CL_RegisterCapability("cl_recoilProtocol", RECOIL_PROTOCOL, 0, RECOIL_PROTOCOL,
+        "Recoil contract protocol (not gameplay model support)");
+    CL_RegisterCapability("cl_recoilModels", SupportedModels(), 0, 0x7fffffff, "Bitmask of recoil models this client applies");
     activeModel = Cvar_RegisterInt("cl_recoilModel", 0, 0, 31, CVAR_ROM, "Effective server recoil model");
-    ack = Cvar_RegisterString("cl_recoilAck", "", CVAR_ROM | CVAR_USERINFO,
-        "Acknowledged server recoil contract fingerprint");
     CL_Recoil_Clear();
 }
 
@@ -140,7 +132,7 @@ static void ActivateListenServer(void)
         Com_PrintWarning(CON_CHANNEL_CLIENT, "recoil_model %d: unsupported profile; native recoil\n", model);
         return;
     }
-    Activate(&contract, wire);
+    Activate(&contract);
 }
 
 void CL_Recoil_SystemInfoChanged(const char *systemInfo)
@@ -155,5 +147,5 @@ void CL_Recoil_SystemInfoChanged(const char *systemInfo)
         Com_Error(ERR_DROP, "Unsupported server recoil contract; install the matching PromodFlex client.");
         return;
     }
-    Activate(&contract, wire);
+    Activate(&contract);
 }

@@ -7,7 +7,6 @@ int main(int argc, char **argv)
     recoil_contract_t contract, before;
     recoil_weapon_t ak = {"ak74u", 2500, 3, 7500};
     recoil_state_t state = {0}, checkpoint, replay, split, whole;
-    char fingerprint[17], other[17];
     const char *bad[] = {"", "2:0", "1:2", "1:00", "1:0:ak74u,2500,3,7500",
         "1:1:", "1:1:ak74u,0,3,7500", "1:1:ak74u,2500,1,7500",
         "1:1:ak74u,2500,3,7500;ak74u,2500,3,7500", "1:1:ak74u,2500,3,7500;",
@@ -42,9 +41,6 @@ int main(int argc, char **argv)
     }
     assert(!Recoil_Decode(NULL, &contract));
     assert(Recoil_Decode("1:1:ak74u,2500,3,7500/mp5,5000,4,5000", &contract));
-    Recoil_Fingerprint("1:1:ak74u,2500,3,7500", fingerprint);
-    Recoil_Fingerprint("1:1:ak74u,2500,3,7501", other);
-    assert(strlen(fingerprint) == 16 && strcmp(fingerprint, other));
 
     {   /* PromodFlex opening: 25% rising to full strength on the fourth shot at AK74u cadence. */
         const recoil_weapon_t opening = {"ak74u", 2500, 4, 7500};

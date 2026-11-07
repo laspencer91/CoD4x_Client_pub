@@ -65,7 +65,7 @@ static void CL_Tickrate_Status_f(void)
 }
 
 /* ROM so neither config nor console can claim a capability the hook lacks. */
-static void RegisterCapability(const char *name, int value, int min, int max, const char *description)
+void CL_RegisterCapability(const char *name, int value, int min, int max, const char *description)
 {
     cvar_t *capability = Cvar_RegisterInt(name, value, min, max, CVAR_ROM | CVAR_USERINFO, description);
     Cvar_SetInt(capability, value);
@@ -78,9 +78,9 @@ void CL_Tickrate_Init(void)
     if (!patchAttempted) Com_Error(ERR_FATAL, "CL_Tickrate_Init before CL_Tickrate_Patch");
     if (patchFailure)
         Com_PrintWarning(CON_CHANNEL_CLIENT, "Tickrate: %s; retaining %d-slot capability\n", patchFailure, PACKET_BACKUP);
-    RegisterCapability("cl_tickrateVersion", history ? TICKRATE_PROTOCOL : 0, 0, TICKRATE_PROTOCOL,
+    CL_RegisterCapability("cl_tickrateVersion", history ? TICKRATE_PROTOCOL : 0, 0, TICKRATE_PROTOCOL,
         "Installed high-rate client protocol");
-    RegisterCapability("cl_deltaSlots", history ? TICKRATE_HISTORY : PACKET_BACKUP, PACKET_BACKUP, TICKRATE_HISTORY,
+    CL_RegisterCapability("cl_deltaSlots", history ? TICKRATE_HISTORY : PACKET_BACKUP, PACKET_BACKUP, TICKRATE_HISTORY,
         "Installed snapshot decoder history capacity");
     activeMsecDvar = Cvar_RegisterInt("cl_tickrate_active_ms", 0, 0, TICKRATE_STOCK_MSEC, CVAR_ROM,
         "Active compatible server frame duration (zero: ordinary server)");

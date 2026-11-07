@@ -27,3 +27,11 @@ h1 { font-size: 36dp; font-weight: normal; letter-spacing: 3dp; margin: 4dp 0 0;
 .toolbar .control { width: 190dp; margin: 0; }.toolbar #close { width: 110dp; }.feedback { flex-grow: 1; padding: 0 20dp; color: var(--muted); font-size: 14dp; }
 .footer { font-size: 11dp; margin-top: 18dp; }
 @media (max-width: 1000dp) { .sample { width: 50%; } }
+.motion-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20dp; }
+.motion-heading input.control { width: 190dp; margin: 0; height: 34dp; padding: 6dp 12dp; font-size: 13dp; }
+.motion-effects .preview { background-color: #252528; }
+.motion-effects .sample { width: 50%; }
+.frame-stage { padding: 26dp 20dp; }
+.row-stage { padding-top: 17dp; }
+.row-stage .stagger-row { padding: 5dp 8dp; margin-bottom: 3dp; font-size: 15dp; border-left: 1dp var(--accent); background-color: #ffffff08; }
+.stagger-row span { color: var(--muted); margin-right: 15dp; }

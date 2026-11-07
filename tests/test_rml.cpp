@@ -211,6 +211,36 @@ int main(int argc, char** argv) {
         Check(D3DXSaveSurfaceToFileA(RML_TEST_OUTPUT "/rml-palette-4x3.png", D3DXIFF_PNG, gpu.surface, nullptr, nullptr), "capture 4:3 palette");
         gpu.Target(3440, 1440); gpu.Render(53.0);
         Check(D3DXSaveSurfaceToFileA(RML_TEST_OUTPUT "/rml-palette-ultrawide.png", D3DXIFF_PNG, gpu.surface, nullptr, nullptr), "capture ultrawide palette");
+        gpu.Target(1280, 800); gpu.Render(54.0);
+        auto* palette = Rml::GetContext("cod4x")->GetDocument(0);
+        auto* effects = palette->GetElementById("motion-effects");
+        auto* reveal = palette->GetElementById("typewriter-probe");
+        auto* replay = palette->GetElementById("replay-effects");
+        auto* frame_content = palette->GetElementById("frame-content-probe");
+        auto* stagger = palette->GetElementById("stagger-probe");
+        auto* power = palette->GetElementById("power-probe");
+        Require(effects && reveal && replay && frame_content && stagger && power, "briefing motion samples and local replay are present");
+        effects->ScrollIntoView(); gpu.Render(54.1);
+        const auto replay_origin = replay->GetAbsoluteOffset(Rml::BoxArea::Border);
+        RmlHost_MouseMove(int(replay_origin.x + 20), int(replay_origin.y + 15));
+        RmlHost_Key(200, 1, 0); RmlHost_Key(200, 0, 0);
+        gpu.Render(54.2);
+        const float start_width = reveal->GetBox().GetSize().x;
+        Require(frame_content->GetComputedValues().opacity() < 0.01f && stagger->GetComputedValues().opacity() < 0.01f &&
+            power->GetComputedValues().opacity() < 0.01f, "frame, rows and power-on restart from their entrance states");
+        Check(D3DXSaveSurfaceToFileA(RML_TEST_OUTPUT "/rml-motion-start.png", D3DXIFF_PNG, gpu.surface, nullptr, nullptr), "capture motion start");
+        for (int frame = 1; frame <= 7; ++frame) gpu.Render(54.2 + frame * 0.05);
+        const float middle_width = reveal->GetBox().GetSize().x;
+        Check(D3DXSaveSurfaceToFileA(RML_TEST_OUTPUT "/rml-motion-middle.png", D3DXIFF_PNG, gpu.surface, nullptr, nullptr), "capture motion mid reveal");
+        for (int frame = 8; frame <= 20; ++frame) gpu.Render(54.2 + frame * 0.05);
+        const float settled_width = reveal->GetBox().GetSize().x;
+        Require(start_width < 5 && middle_width > start_width + 30 && settled_width > middle_width + 30,
+            "replay restarts the clipped text reveal and progresses to full width");
+        Require(frame_content->GetComputedValues().opacity() > 0.99f && stagger->GetComputedValues().opacity() > 0.99f &&
+            power->GetComputedValues().opacity() > 0.99f, "all briefing entrances settle to fully readable content");
+        Check(D3DXSaveSurfaceToFileA(RML_TEST_OUTPUT "/rml-motion-settled.png", D3DXIFF_PNG, gpu.surface, nullptr, nullptr), "capture settled briefing effects");
+        gpu.Render(56.2);
+        Require(reveal->GetBox().GetSize().x == settled_width, "motion settles without looping or collapsing text");
         Require(RmlHost_Open(RML_SCREEN_DIAGNOSTIC), "switch back to diagnostic through typed screen API");
         Require(warnings <= 1, "palette loads without warnings");
         RmlHost_Shutdown(); return 0;

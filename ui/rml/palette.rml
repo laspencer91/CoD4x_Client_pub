@@ -27,6 +27,15 @@
             <div class="kit-specimen"><div class="kit-label">11 / FEEDBACK</div><div class="kit-notice owned">OWNED / READY FOR THIS ROUND</div><div class="kit-notice blocked">WAIT FOR SPAWN / PURCHASE LOCKED</div><div class="kit-badge pending"><span class="kit-pending-dot">●</span> AWAITING SERVER</div><div class="note">A click is a request. Confirmation follows authoritative state.</div></div>
             <div class="kit-specimen"><div class="kit-label">12 / TEAM SUPPORT</div><div class="kit-title">MAVERICK <span class="accepted">$50</span></div><div class="kit-label">SPEC OPS / FRAG OWNED</div><input type="button" class="control kit-choice" value="GIVE $50 →" data-action="select" /><div class="note">An explicit action for a player session. No accidental whole-card transfers.</div></div>
         </div></div>
+        <div id="motion-effects" class="kit-section motion-effects">
+            <div class="motion-heading"><div class="eyebrow accent">BRIEFING / MOTION</div><input id="replay-effects" type="button" class="control" data-action="replay" value="REPLAY EFFECTS" /></div>
+            <div class="samples">
+                <div class="sample"><div class="label">13 / TYPEWRITER REVEAL</div><div class="preview"><div class="eyebrow muted">BRIEFING</div><div id="typewriter-probe" class="typewriter-line large">SECURE THE SITE</div></div><div class="recipe">.typewriter-line / 800ms</div><div class="note">Left-to-right clipped text reveal. Briefings and comms; prices stay instant.</div></div>
+                <div class="sample"><div class="label">14 / FRAME DRAW</div><div class="preview frame-stage"><div class="draw-frame"><div class="bracket tl" /><div class="bracket tr" /><div class="bracket bl" /><div class="bracket br" /><div id="frame-rule-probe" class="frame-rule" /><div id="frame-content-probe" class="frame-content">ROUND START</div></div></div><div class="recipe">.draw-frame / 550ms</div><div class="note">Corners, rule, then content. Briefing and round banners.</div></div>
+                <div class="sample"><div class="label">15 / STAGGERED ROWS</div><div class="preview row-stage"><div class="stagger-row"><span>01</span> ASSAULT</div><div class="stagger-row stagger-second"><span>02</span> SPEC OPS</div><div id="stagger-probe" class="stagger-row stagger-third"><span>03</span> SCOPE</div></div><div class="recipe">.stagger-row / 500ms</div><div class="note">Short visual entry for score and squad rows. No stagger on live purchases.</div></div>
+                <div class="sample"><div class="label">16 / POWER ON</div><div class="preview"><div id="power-probe" class="power-on"><div class="eyebrow accent">COMMS</div><div class="large">CONNECTED</div><div class="muted">SIGNAL STABLE</div></div></div><div class="recipe">.power-on / 240ms</div><div class="note">One low-contrast flicker, then steady. Connection and equipment status.</div></div>
+            </div>
+        </div>
         <div class="footer eyebrow">F7 ECONOMY PREVIEW / SAVE RML &amp; RCSS TO UPDATE / F9 MANUAL RELOAD / ESC CLOSE</div>
     </div>
 </body>

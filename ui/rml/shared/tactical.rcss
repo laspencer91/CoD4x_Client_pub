@@ -16,3 +16,25 @@
 .playing .cyan { animation: 0.24s linear-in-out break-cyan; }
 @keyframes break-red { from { transform: translateX(-5dp); opacity: 0.8; } 25% { transform: translateX(4dp); opacity: 0.7; } 50% { transform: translateX(-2dp); opacity: 0.5; } to { transform: translateX(0dp); opacity: 0; } }
 @keyframes break-cyan { from { transform: translateX(5dp); opacity: 0.8; } 25% { transform: translateX(-3dp); opacity: 0.7; } 50% { transform: translateX(2dp); opacity: 0.5; } to { transform: translateX(0dp); opacity: 0; } }
+
+/* Proline e7/g12/g13/g17, using clipping and geometry rather than filters. */
+.typewriter-line { width: 200dp; max-width: 100%; white-space: nowrap; overflow: hidden; clip: always; border-right: 1dp var(--accent); }
+.playing .typewriter-line { animation: 0.8s linear-in-out text-reveal; }
+@keyframes text-reveal { from { width: 0dp; } to { width: 200dp; } }
+.draw-frame { position: relative; width: 240dp; max-width: 100%; height: 86dp; }
+.draw-frame .frame-rule { position: absolute; top: 9dp; left: 9dp; width: 222dp; height: 1dp; background-color: var(--accent); }
+.draw-frame .frame-content { padding: 30dp 18dp 0; }
+.playing .draw-frame .bracket { animation: 0.12s exponential-out frame-corners; }
+.playing .draw-frame .frame-rule { animation: 0.4s linear-in-out frame-rule; }
+.playing .draw-frame .frame-content { animation: 0.55s linear-in-out frame-content; }
+@keyframes frame-corners { from { opacity: 0; transform: scale(0.5); } to { opacity: 1; transform: scale(1); } }
+@keyframes frame-rule { from { width: 0dp; } 30% { width: 0dp; } to { width: 222dp; } }
+@keyframes frame-content { from { opacity: 0; } 70% { opacity: 0; } to { opacity: 1; } }
+.playing .stagger-row { animation: 0.5s exponential-out stagger-first; }
+.playing .stagger-second { animation: 0.5s exponential-out stagger-second; }
+.playing .stagger-third { animation: 0.5s exponential-out stagger-third; }
+@keyframes stagger-first { from { opacity: 0; transform: translateX(8dp); } to { opacity: 1; transform: translateX(0dp); } }
+@keyframes stagger-second { from { opacity: 0; transform: translateX(8dp); } 25% { opacity: 0; transform: translateX(8dp); } to { opacity: 1; transform: translateX(0dp); } }
+@keyframes stagger-third { from { opacity: 0; transform: translateX(8dp); } 50% { opacity: 0; transform: translateX(8dp); } to { opacity: 1; transform: translateX(0dp); } }
+.playing .power-on { animation: 0.24s linear-in-out power-on; }
+@keyframes power-on { from { opacity: 0; } 20% { opacity: 1; } 30% { opacity: 0.35; } 50% { opacity: 1; } 60% { opacity: 0.7; } to { opacity: 1; } }

@@ -61,7 +61,7 @@ Reference: `laspencer91/ProlineUnreal` revision `396a54108ac71a3960c51a7a7be4c8f
 | Arrival | 180 ms exponential-out translate/opacity settle. | Menu panels and updated selections. |
 | Response states | Green amount punch, muted red denial text and disabled controls. | State vocabulary; sample values make no purchases. |
 
-Replay restarts the sample timelines; all twelve samples share the same source reload and local action route. Initial layout resolves before text/control geometry is recorded. Resizing receives a second layout update before recording at the new density.
+Replay restarts the sample timelines; all sixteen samples share the same source reload and local action route. Initial layout resolves before text/control geometry is recorded. Resizing receives a second layout update before recording at the new density.
 
 The next renderer features are explicit: layer compositing and correct clipping first, then Proline's row-band/RGB glitch and noise dissolve. Grime needs a blurred silhouette; scene blur needs a separate scene capture. Decorative particles need a bounded emitter and batched geometry, rather than a DOM element per particle. None of those backend features is implied by adding their RCSS declarations. The development economy bridge is implemented; remaining native acceptance and packaging scope is recorded in the mod's `docs/rml-adoption.md`.
 
@@ -93,8 +93,23 @@ Game assets downloaded for this workspace live under `C:\development\games\cod4`
 
 ## Economy and expanded palette follow-up
 
-The palette now contains twelve samples: the original six effects plus state badges, wallet flow, armor capacity, action hierarchy, feedback and team support. `TEST_ISOLATION` shortcuts are F7 for the economy fixture, F8 for the palette and F9 to reload the current screen. `rml_economy_preview` and `rml_palette` provide console equivalents. The preview does not spend live cash.
+The palette contains sixteen samples: six original effects, six economy components and four briefing/motion effects. `TEST_ISOLATION` shortcuts are F7 for the economy fixture, F8 for the palette and F9 to reload the current screen. `rml_economy_preview` and `rml_palette` provide console equivalents. The preview does not spend live cash.
 
 The runner watches the client `ui/rml` and sibling mod `ui/rml` roots together. Mod assets override shared paths. The current economy uses charcoal texture-gradient panels and stock HUD icons; weapon exports preserve source pixels inside padded 2:1 canvases. Shader-backed CSS gradients remain unsupported.
 
 The full client and all five CTests passed on this workspace, including `rml_economy`. Its actual D3D9 document checks cover an on-screen Deploy button at 1280x800, native control events, authoritative cash retention, buy expiry and retained state on reload. The mod's `docs/evidence/2026-11-06-economy-visual.md` and aspect-ratio capture distinguish fixture evidence from native multiplayer acceptance.
+
+### Briefing motion recipes
+
+Four additional samples adapt Proline palette e7, g12, g13 and g17 using the existing geometry/scissor backend:
+
+| Recipe | Behavior | Intended use |
+| --- | --- | --- |
+| `.typewriter-line` | 800ms left-to-right clipped line reveal with a caret. This is a continuous mask, not per-character typing. | Briefings and comms; keep prices and timers instant. |
+| `.draw-frame` | Corners appear, the rule draws, then content fades in over 550ms. | Round/briefing headers. |
+| `.stagger-row`, `.stagger-second`, `.stagger-third` | Three short row entrances settle within 500ms. | Initial squad/score list presentation. |
+| `.power-on` | One 240ms opacity flicker settles to fully readable text. | Connection/status arrivals. |
+
+Reusable rules live in `ui/rml/shared/tactical.rcss`; preview-only layout lives in `palette.rcss`. Add `.playing` on an ancestor to run the recipes. Resting CSS supplies the fully visible state; these effects do not loop. Size the typewriter's resting width and its keyframe end width together for different text. The frame recipe uses a 240dp stage and 222dp rule. Neither recipe hides transaction controls.
+
+In F8, scroll to **Briefing / Motion** and press **Replay Effects**. It uses the existing replay route and preserves scroll position. Source reload uses the same shared stylesheet path. The actual D3D9 test exercises that button with mouse input, verifies intermediate reveal widths, full settled width and non-looping state, and records start/middle/settled PNGs. See [motion evidence](evidence/2026-11-06-rml-motion.md). These are palette components; they have not been wired to gameplay events. Full row-band glitch and noise dissolve remain separate renderer work.

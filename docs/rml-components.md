@@ -48,6 +48,11 @@ Regular class limits and server equipment eligibility remain authoritative. Stan
 - **Markup layout.** Keep one element per line. Line breaks between tags are inert because RmlUi drops whitespace-only text; keep text and inline spans that must touch on one line.
 - **Staggered motion.** Delay a shared keyframe instead of writing hold segments: `animation: 0.3s 0.1s exponential-out stagger-in;`. Vendor patch 0001 shows the first keyframe during the delay, so delayed rows do not flash their resting state.
 - **UI audio.** `UiAudio` in `src/rml/ui_audio.hpp` owns hover/click cue rules (one cue per control change, 75 ms rate limit, 350 ms mute after a click). Screens call it rather than playing `mouse_over` directly.
+- **Markup builds responses.** Economy controls carry the full server response in `data-econ`, computed by a data expression: `data-attr-data-econ="'give:' + mate.token"`. C++ checks `EconomyActionAllowed` and submits; `EconomyView::Event` captures the pressed control's `data-econ` on mousedown/keydown so a model refresh cannot retarget a click. Only picker rows (`primary`/`secondary`, via `ChooseWeapon`), picker toggles and preview controls keep short names.
+- **Shared view helpers.** `src/rml/view_support.hpp` holds `DvarSnapshot` (dvar cache that dirties the model), `FitStage`/`UpdateStage` (density and resize double update) and `FormatClock`. Use them instead of copying.
+- **Stylesheet-owned geometry.** `BroadcastView::MeasureCards` probes `.player-card` and `.player-card.condensed` heights from the loaded stylesheet; only the gaps are constants in C++.
+- **No `var()` in `transition`.** Checked 2026-11-07 against the vendored RmlUi 6.3: `var()` in `animation` resolves, but a `transition` using it never animates (the value jumps). Write transition timings literally.
+- **Team colours.** Follow the game's existing language. Players see their own team in Promod's friendly green and the enemy in red (`--friendly-text`, `--enemy-text`, as in the `hud.menu` alive counter). Observers see each side in the scoreboard's faction colour (`g_TeamColor_*` from `_scoreboard.gsc`, read as `rml_team_color_allies/axis`); `BroadcastView` overrides the `--team-*` tokens on the stage, so cards and scores follow. The bright blue/red tokens are only the fallback.
 
 ## Passive HUD and component unification (2026-11-07)
 

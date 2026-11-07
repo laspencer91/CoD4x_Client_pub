@@ -63,6 +63,8 @@ ui-toggle input.toggle-hit:hover ~ .toggle-track, ui-toggle input.toggle-hit:foc
     --team-allies: #67b5d1; --team-axis: #d45a59;
     --team-allies-soft: #67b5d170; --team-axis-soft: #d45a5970;
     --team-allies-fill: #67b5d120; --team-axis-fill: #d45a5920;
+    --team-allies-text: #8ab8c9; --team-axis-text: #cf8a87;
+    --friendly-text: #bafcba; --enemy-text: #ffa8a8; /* Promod's alive counter, ui_mp/hud.menu */
 }
 .canvas-1080 {
     position: absolute; left: 50%; top: 50%; width: 1920dp; height: 1080dp;

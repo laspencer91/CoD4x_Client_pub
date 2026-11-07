@@ -174,7 +174,8 @@ int main(int argc, char** argv) {
         gpu.Render(1.0); gpu.Render(1.3);
         Require(RmlHost_BroadcastReady() && !RmlHost_Visible(), "passive HUD renders without a captured menu");
         auto* doc=Rml::GetContext("cod4x-broadcast")->GetDocument(0);
-        Require(doc->QuerySelector(".match-clock")->GetInnerRML()=="1:22", "HUD reads the authoritative round clock");
+        Require(doc->QuerySelector(".match-clock")->GetInnerRML()=="1:22" && doc->QuerySelector(".match-clock")->GetBox().GetSize().y>0,
+            "HUD reads and lays out the authoritative round clock");
         Rml::ElementList cards; doc->QuerySelectorAll(cards,".player-card");
         cards.erase(std::remove_if(cards.begin(),cards.end(),[](Rml::Element* element) { return !element->IsVisible(); }),cards.end());
         Require(cards.size()==10 && cards[0]->IsClassSet("dead") && cards[2]->IsClassSet("observed"), "shared cards reflect dead and observed states");
@@ -208,7 +209,9 @@ int main(int argc, char** argv) {
         doc=Rml::GetContext("cod4x-broadcast")->GetDocument(0);
         Require(!RmlHost_Visible(), "passive reload never acquires menu input");
         const auto hud_pixels=gpu.Pixels();
-        Require(Near(hud_pixels[50*1920+766],103,181,209), "top score bar remains rendered after card hiding and reload");
+        int allies_ink=0;
+        for (int y=21;y<66;++y) for (int x=795;x<855;++x) allies_ink+=Near(hud_pixels[y*1920+x],138,184,201);
+        Require(allies_ink>20, "top score bar remains rendered after card hiding and reload");
         for (const auto size : {Rml::Vector2i(1024,768),Rml::Vector2i(3440,1440)}) {
             gpu.Target(size.x,size.y); gpu.Render(3.6);
             auto* bar=doc->QuerySelector(".match-score");
@@ -219,7 +222,20 @@ int main(int argc, char** argv) {
             auto* last=live_cards[4]; const float edge=last->GetAbsoluteOffset(Rml::BoxArea::Border).y+last->GetBox().GetSize(Rml::BoxArea::Border).y;
             Require(edge<=size.y+1 && edge>size.y-60*density, "team cards stay anchored to the viewport bottom");
         }
-        economy_values["broadcast_mode"]="player"; gpu.Render(4.0);
+        economy_values["rml_team_color_allies"]="#99a3b0"; economy_values["rml_team_color_axis"]="#a69169"; gpu.Render(3.9); gpu.Render(3.95);
+        {
+            const auto faction=doc->QuerySelector(".team-score.left")->GetComputedValues().color();
+            Require(faction.red==188 && faction.green==195 && faction.blue==203, "observer scores use the scoreboard's faction colours");
+        }
+        economy_values["broadcast_mode"]="player"; economy_values["rml_local_team"]="axis"; gpu.Render(4.0);
+        {
+            gpu.Target(1920,1080); gpu.Render(4.05);
+            Rml::ElementList scores; doc->QuerySelectorAll(scores,".score-value");
+            Require(doc->QuerySelector(".match-score")->IsClassSet("relative") && scores.size()==2 &&
+                scores[0]->GetInnerRML()=="3" && scores[1]->GetInnerRML()=="12", "players see their own team's score on the left");
+            Require(!doc->QuerySelector(".alive-count") || !doc->QuerySelector(".alive-count")->IsVisible(), "player bar leaves alive counts to the stock counter");
+            Check(D3DXSaveSurfaceToFileA(RML_TEST_OUTPUT "/rml-broadcast-player.png",D3DXIFF_PNG,gpu.surface,nullptr,nullptr),"capture player score bar");
+        }
         Require(!doc->QuerySelector(".roster")->IsVisible(), "ordinary player mode has no private observer roster");
         const auto requests=economy_requests.size(); RmlHost_Key('1',1,0); RmlHost_Key('1',0,0);
         Require(economy_requests.size()==requests && !RmlHost_Visible(), "passive HUD never routes gameplay keys to menu actions");
@@ -373,7 +389,7 @@ int main(int argc, char** argv) {
         economy_values["flat_mate_0_utility"]="weapon_flashbang"; economy_values["flat_mate_0_frag"]="1";
         economy_values["flat_demolitions_allowed"]="1";
         economy_values["flat_demolitions_capacity"]="0/1";
-        economy_values["attach_allow_assault_silencer"]="1";
+        economy_values["economy_suppressor_primary_supported"]="1";
         economy_values["attach_allow_assault_reflex"]="1";
         gpu.Render(14.0);
         Require(!restored_doc->QuerySelector(".top-status")->IsVisible() &&

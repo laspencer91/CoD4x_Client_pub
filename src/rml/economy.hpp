@@ -2,6 +2,7 @@
 #include "rml_host.h"
 #include "economy_preview.hpp"
 #include "ui_audio.hpp"
+#include "view_support.hpp"
 #include <RmlUi/Core.h>
 #include <map>
 
@@ -40,8 +41,7 @@ private:
     std::vector<EconomyOption> roles, weapons, pistols, mates;
     std::vector<RebuyOption> rebuy_rows;
     EconomyPreview preview_state;
-    Rml::String held_rebuy;
-    std::map<Rml::String, Rml::String> values;
+    DvarSnapshot values;
     Rml::String wallet, phase, countdown, map, team, primary, secondary;
     Rml::String armor_price, frag_price, tactical, camo, feedback, deploy_label;
     Rml::String demo_price, focus_body, balance_change;
@@ -57,7 +57,7 @@ private:
     bool preview = false;
     bool debit = false;
     int previous_cash = -1;
-    Rml::String held_gift;
+    Rml::String held_action;
     UiAudio audio;
     Rml::String Value(const rml_host_t&, const Rml::String&, bool);
     bool Submit(const Rml::String&, const rml_host_t&, bool, double);

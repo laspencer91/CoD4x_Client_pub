@@ -15,4 +15,5 @@ int R_QueueRmlFrame(uint32_t ticket);
 struct menuDef_t;
 void CL_Rml_MenuOpened(struct menuDef_t *menu);
 void CL_Rml_MenuClosing(struct menuDef_t *menu);
+void CL_Rml_OpenScriptMenu_f(void);
 #endif

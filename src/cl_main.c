@@ -1115,7 +1115,11 @@ void CL_InitOnceForAllClients(){
   Cmd_AddCommand("updatehunkusage", CL_UpdateLevelHunkUsage);
   Cmd_AddCommand("startSingleplayer", CL_startSingleplayer_f);
   Cmd_AddCommand("cubemapShot", CL_CubemapShot_f);
+#ifdef COD4X_RMLUI
+  Cmd_AddCommand("openScriptMenu", CL_Rml_OpenScriptMenu_f);
+#else
   Cmd_AddCommand("openScriptMenu", CL_OpenScriptMenu_f);
+#endif
   Cmd_AddCommand("localizeSoundAliasFiles", Com_WriteLocalizedSoundAliasFiles);
   Cmd_AddCommand("closemenu", UI_CloseMenu_f);
 

@@ -64,6 +64,10 @@ void EconomyPreview::Sync() {
     const bool optic = fields["loadout_class"]!="sniper" && gun!="uzi" && gun!="mp44";
     fields["economy_red_dot_supported"] = optic ? "1" : "0";
     fields["economy_can_buy_red_dot"] = eligible && optic && cash>=Number("economy_red_dot_price") ? "1" : "0";
+    // Mirrors economy_items.gsc::suppressorEligible for the offline fixture.
+    const auto& role = fields["loadout_class"]; const auto& pistol = fields["loadout_secondary"];
+    fields["economy_suppressor_primary_supported"] = (role=="assault" || role=="specops") && gun!="mp44" ? "1" : "0";
+    fields["economy_suppressor_secondary_supported"] = pistol!="deserteagle" && pistol!="deserteaglegold" ? "1" : "0";
     fields["flat_mate_0_cash"] = "$"+fields["economy_cash"];
     fields["flat_mate_0_primary"] = gun; fields["flat_mate_0_class"] = fields["loadout_class"];
     fields["flat_mate_0_frag"] = fields["economy_frag_owned"];

@@ -7,3 +7,7 @@
     color: #fff2d7;
     font-effect: glow(0dp 5dp 0dp 0dp #d9ba7080);
 }
+/* Stock CoD4 HUD text carries a soft dark drop shadow; use on text drawn over the game scene. Inherited. */
+.hud-text {
+    font-effect: glow(0dp 2dp 1dp 1dp #000000c8);
+}

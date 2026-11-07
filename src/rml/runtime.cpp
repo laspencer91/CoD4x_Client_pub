@@ -7,6 +7,7 @@
 #include "toggle.hpp"
 #include "modal.hpp"
 #include "economy.hpp"
+#include "view_support.hpp"
 #include "ui_audio.hpp"
 #include "broadcast.hpp"
 #include "player_name.hpp"
@@ -315,6 +316,8 @@ extern "C" int RmlHost_Open(rml_screen_t screen) {
         document_path = path;
         if (!RmlHost_Reload()) { document_path = previous; economy_screen = previous_economy; economy_preview = previous_preview; return 0; }
     }
+    // Entrance animations play on every open, not only the first document load.
+    if (!visible) want_replay = true;
     return RmlHost_Show();
 }
 
@@ -377,15 +380,10 @@ extern "C" uint32_t RmlHost_Record(int width, int height, double seconds) {
     if (!visible && !broadcast_ready) return 0;
     if (visible && economy_screen) economy.Update(host, economy_preview, now);
     if (visible) {
-        const float density = economy_screen ? std::max(0.25f, std::min(width / 1920.f, height / 1080.f)) :
-            std::max(0.5f, std::min(width / 1280.f, height / 800.f));
-        const bool resized = context->GetDimensions() != Rml::Vector2i(width, height) ||
-            context->GetDensityIndependentPixelRatio() != density;
-        context->SetDimensions({width, height});
-        context->SetDensityIndependentPixelRatio(density);
+        const bool resized = economy_screen ? FitStage(context, width, height, 1920.f, 1080.f, 0.25f) :
+            FitStage(context, width, height, 1280.f, 800.f, 0.5f);
         if (want_replay && document) { document->SetClass("playing", false); context->Update(); document->SetClass("playing", true); ReplayDecryptText(document); want_replay = false; }
-        context->Update();
-        if (resized) context->Update();
+        UpdateStage(context, resized);
         if (economy_screen && economy.ResolveFocus()) context->Update();
     }
     recorder.Begin(width, height);

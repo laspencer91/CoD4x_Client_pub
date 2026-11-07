@@ -22,6 +22,10 @@ static int rml_previous_catcher, rml_modifiers;
 static struct { menuDef_t *menu; int item_count; } rml_menus[4];
 static char rml_response[96];
 static int rml_retry_at;
+/* The buy key opens the economy screen locally one frame after its bind asks the server; the server's
+ * menu then adopts the open screen. Times are Sys_Milliseconds; zero means none pending. */
+static qboolean rml_open_pending, rml_first_frame_pending;
+static int rml_buy_key_at, rml_local_open_at;
 static Material *rml_cursor;
 static int rml_cursor_x, rml_cursor_y;
 #ifdef COD4X_TEST_ISOLATION
@@ -53,6 +57,8 @@ void CL_Rml_Hide(void)
 {
     CL_Rml_RestoreMenus();
     rml_response[0] = 0;
+    rml_open_pending = rml_first_frame_pending = qfalse;
+    rml_local_open_at = 0;
     RmlHost_Hide();
     if (rml_captured) {
         Key_ClearStates(0);
@@ -83,6 +89,22 @@ static const char* CL_Rml_Value(const char* name)
         unsigned char rgba[4];
         RB_LookupColor(name[15],(char*)rgba);
         Com_sprintf(color,sizeof(color),"#%02x%02x%02x%02x",rgba[0],rgba[1],rgba[2],rgba[3]);
+        return color;
+    }
+    if (!strcmp(name,"rml_local_team")) {
+        static const char *teams[] = {"", "axis", "allies", "spectator"};
+        const int team = cg.bgs.clientinfo[cg.clientNum].team;
+        return team >= 0 && team < 4 ? teams[team] : "";
+    }
+    /* Faction colours set by _scoreboard.gsc, resolved the way the scoreboard resolves them. */
+    if (!strcmp(name,"rml_team_color_allies") || !strcmp(name,"rml_team_color_axis")) {
+        const char* source=!strcmp(name,"rml_team_color_allies") ? "g_TeamColor_Allies" : "g_TeamColor_Axis";
+        float rgb[4];
+        int i, c[3];
+        if (!Cvar_GetString(source)[0]) return "";
+        Cvar_GetUnpackedColorByName(source,rgb);
+        for (i=0;i<3;++i) c[i]=rgb[i]<=0 ? 0 : rgb[i]>=1 ? 255 : (int)(rgb[i]*255+0.5f);
+        Com_sprintf(color,sizeof(color),"#%02x%02x%02x",c[0],c[1],c[2]);
         return color;
     }
     return Cvar_GetString(name);
@@ -130,7 +152,7 @@ static void CL_Rml_EconomyPreview_f(void) { CL_Rml_RestoreMenus(); RmlHost_Econo
 
 static int CL_Rml_Response(const char *response)
 {
-    if (!rml_menus[0].menu || rml_response[0] || !RmlHost_ActionAllowed(response)) return 0;
+    if ((!rml_menus[0].menu && !rml_local_open_at) || rml_response[0] || !RmlHost_ActionAllowed(response)) return 0;
     /* Match the stock picker: preview the selected weapon immediately. */
     if (!strncmp(response, "pick_primary:", 13) && strlen(response) == 14) {
         char key[40];
@@ -143,14 +165,53 @@ static int CL_Rml_Response(const char *response)
     return 1;
 }
 
+static qboolean CL_Rml_EconomyMenusEnabled(void)
+{
+    return rml_economy && rml_economy->boolean && rml_enabled->boolean && (Cvar_GetInt("flat_economy_live") ||
+        (Cvar_GetInt("flat_loadout_ready") && !Q_stricmp(Cvar_GetString("flat_loadout_mode"), "standard")));
+}
+
+static void CL_Rml_OpenLocally(void)
+{
+    const char *team = CL_Rml_Value("rml_local_team");
+    rml_open_pending = qfalse;
+    if (rml_captured || clientUIActives.state != CA_ACTIVE || uiMem.uiInfo.uiDC.openMenuCount || !CL_Rml_EconomyMenusEnabled() ||
+        (Q_stricmp(team, "allies") && Q_stricmp(team, "axis"))) return;
+    RmlHost_EconomyDialog(0);
+    if (!CL_Rml_Show(RML_SCREEN_ECONOMY)) return;
+    rml_local_open_at = Sys_Milliseconds();
+    rml_first_frame_pending = qtrue;
+}
+
+/* Wraps openScriptMenu: a request to open the class menu also opens the RML screen locally next frame,
+ * instead of waiting for the server's reply. Binds, aliases and the console all pass through here. */
+void CL_Rml_OpenScriptMenu_f(void)
+{
+    if (!rml_captured && Cmd_Argc() == 3 && !Q_stricmp(Cmd_Argv(2), "open") &&
+        (!Q_stricmp(Cmd_Argv(1), "loadout") || !Q_stricmp(Cmd_Argv(1), "flat_loadout"))) {
+        rml_open_pending = qtrue;
+        rml_buy_key_at = Sys_Milliseconds();
+    }
+    CL_OpenScriptMenu_f();
+}
+
 void CL_Rml_MenuOpened(menuDef_t *menu)
 {
     static const char *names[] = {"flat_loadout", "flat_primary_picker", "flat_secondary_picker", "flat_demolition_confirm"};
     int i;
-    if (!rml_economy || !rml_economy->boolean || !rml_enabled->boolean || (!Cvar_GetInt("flat_economy_live") && !(Cvar_GetInt("flat_loadout_ready") && !Q_stricmp(Cvar_GetString("flat_loadout_mode"), "standard"))) || Sys_Milliseconds() < rml_retry_at) return;
+    if (!CL_Rml_EconomyMenusEnabled() || Sys_Milliseconds() < rml_retry_at) return;
     for (i = 0; i < 4; ++i) if (!Q_stricmp(menu->window.name, names[i])) break;
     if (i == 4 || (i && !rml_menus[0].menu)) return;
-    if (!i) { RmlHost_EconomyDialog(0); if (!CL_Rml_Show(RML_SCREEN_ECONOMY)) { rml_retry_at=Sys_Milliseconds()+1000; return; } rml_retry_at=0; }
+    if (!i) {
+        if (rml_local_open_at) {
+            Com_Printf(CON_CHANNEL_UI, "RmlUi: server menu arrived %d ms after the buy key\n", Sys_Milliseconds() - rml_buy_key_at);
+            rml_local_open_at = 0;
+        } else if (!(rml_captured && RmlHost_Visible())) {
+            RmlHost_EconomyDialog(0);
+            if (!CL_Rml_Show(RML_SCREEN_ECONOMY)) { rml_retry_at=Sys_Milliseconds()+1000; return; }
+        }
+        rml_retry_at=0;
+    }
     if (!rml_menus[i].menu) { rml_menus[i].menu = menu; rml_menus[i].item_count = menu->itemCount; }
     menu->itemCount = 0;
     if (i == 3) RmlHost_EconomyDialog(1);
@@ -172,9 +233,9 @@ static void CL_Rml_RunResponse(void)
     char response[96], script[160];
     itemDef_t item;
     menuDef_t *menu;
-    if (!rml_response[0]) return;
+    /* A response made on a local open waits for the server's menu to adopt the screen. */
+    if (!rml_response[0] || !rml_menus[0].menu) return;
     Q_strncpyz(response, rml_response, sizeof(response)); rml_response[0] = 0;
-    if (!rml_menus[0].menu) return;
     if (!strcmp(response, "close")) {
         Menus_CloseByName(rml_menus[3].menu ? "flat_demolition_confirm" : "flat_loadout");
         if (!uiMem.uiInfo.uiDC.openMenuCount) Key_SetCatcher(clientUIActives.keyCatchers & ~RML_MENU_CATCHER);
@@ -267,6 +328,12 @@ void CL_Rml_Frame(void)
         }
     }
 #endif
+    if (rml_open_pending) CL_Rml_OpenLocally();
+    /* A local open the server does not confirm (team change, menus disabled) must not linger. */
+    if (rml_local_open_at && Sys_Milliseconds() - rml_local_open_at > 1500) {
+        CL_Rml_Log("server did not open the class menu; closing the local screen");
+        CL_Rml_Hide();
+    }
     CL_Rml_RunResponse();
     if (!rml_captured && rml_enabled && rml_enabled->boolean && rml_economy->boolean && IN_AppActive() && uiMem.uiInfo.uiDC.openMenuCount) {
         UiContext_t *dc = &uiMem.uiInfo.uiDC;
@@ -293,6 +360,10 @@ void CL_Rml_Frame(void)
     }
     ticket = RmlHost_Record(_vidConfig.displayWidth, _vidConfig.displayHeight, Sys_Milliseconds() / 1000.0);
     queued=ticket && R_QueueRmlFrame(ticket);
+    if (queued && rml_first_frame_pending) {
+        rml_first_frame_pending = qfalse;
+        Com_Printf(CON_CHANNEL_UI, "RmlUi: first frame %d ms after the buy key\n", Sys_Milliseconds() - rml_buy_key_at);
+    }
     Cvar_SetStringByName("ui_rml_broadcast_drawn",queued && RmlHost_BroadcastReady() ? "1" : "0");
     if (ticket && !queued) RmlHost_Discard(ticket);
     if (ticket && RmlHost_Visible() && IN_AppActive() && !(clientUIActives.keyCatchers & KEYCATCH_CONSOLE) && rml_cursor && !Material_IsDefault(rml_cursor)) {

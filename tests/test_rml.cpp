@@ -208,7 +208,7 @@ int main(int argc, char** argv) {
         doc=Rml::GetContext("cod4x-broadcast")->GetDocument(0);
         Require(!RmlHost_Visible(), "passive reload never acquires menu input");
         const auto hud_pixels=gpu.Pixels();
-        Require(Near(hud_pixels[60*1920+721],103,181,209), "top score bar remains rendered after card hiding and reload");
+        Require(Near(hud_pixels[50*1920+766],103,181,209), "top score bar remains rendered after card hiding and reload");
         for (const auto size : {Rml::Vector2i(1024,768),Rml::Vector2i(3440,1440)}) {
             gpu.Target(size.x,size.y); gpu.Render(3.6);
             auto* bar=doc->QuerySelector(".match-score");

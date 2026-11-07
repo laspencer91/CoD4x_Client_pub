@@ -6,6 +6,7 @@
     <link type="text/rcss" href="shared/tactical.rcss" />
     <link type="text/rcss" href="shared/decrypt-text.rcss" />
     <link type="text/rcss" href="shared/hardware.rcss" />
+    <link type="text/rcss" href="shared/text-effects.rcss" />
     <link type="text/rcss" href="palette.rcss" />
 </head>
 <body data-model="diagnostic" class="playing">
@@ -46,6 +47,15 @@
             <div class="note">2-3 rapid letters or digits per character, then lock. Optional 1dp glitch; no symbols in the scramble.</div>
         </div>
         <div class="kit-section hardware-ui"><div class="label">18 / HARDWARE CONTROLS</div><div class="preview surface-card scanlined"><div class="hardware-toggle-example"><span>AUTO-REBUY</span><ui-toggle id="palette-toggle" data-action="toggle-demo" data-attrif-checked="toggle_demo" /></div><div class="charge-meter hardware-armor-example"><span class="charge-segment filled" /><span class="charge-segment" /></div></div><div class="recipe">ui-toggle / .charge-meter / .surface-card.scanlined</div><div class="note">Controlled switch, two charge segments and shared hardware texture.</div></div>
+        <div id="text-effects" class="kit-section">
+            <div class="label">19 / TEXT GLOW</div>
+            <div class="samples">
+                <div class="sample"><div class="preview"><div class="large text-glow">ROUND WIN</div><div class="muted">COOL HALO / RESULT</div></div><div class="recipe">.text-glow</div></div>
+                <div class="sample"><div class="preview"><div class="large text-glow text-glow-amber">OVERTIME</div><div class="muted">AMBER HALO / ATTENTION</div></div><div class="recipe">.text-glow.text-glow-amber</div></div>
+                <div class="sample"><div class="preview"><decrypt-text class="large text-glow" text="ROUND START" tick-ms="18" cycles="2" glitch="glitch" /></div><div class="recipe">decrypt-text + .text-glow</div></div>
+            </div>
+            <div class="note">Blurred glyph halo with a crisp text face. Opt in for results and announcements; keep routine labels steady.</div>
+        </div>
         <div class="footer eyebrow">F7 ECONOMY PREVIEW / SAVE RML &amp; RCSS TO UPDATE / F9 MANUAL RELOAD / ESC CLOSE</div>
     </div>
 </body>

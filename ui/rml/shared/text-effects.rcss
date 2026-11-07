@@ -1,0 +1,9 @@
+/* Opt-in text emphasis. Keep live numbers and routine labels steady. */
+.text-glow {
+    color: #eef3ff;
+    font-effect: glow(0dp 5dp 0dp 0dp #8daef09c);
+}
+.text-glow.text-glow-amber {
+    color: #fff2d7;
+    font-effect: glow(0dp 5dp 0dp 0dp #d9ba7080);
+}

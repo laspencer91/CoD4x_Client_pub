@@ -8,6 +8,7 @@
 #include "sys_patch.h"
 #include "callbacks.h"
 #include "cl_tickrate.h"
+#include "cl_recoil.h"
 #ifdef COD4X_VOLUMETRIC_SMOKE
 #include "cl_smoke.h"
 #endif
@@ -1085,6 +1086,7 @@ void Patch_Other(){
   SV_Patches();
   Gfx_PatchRB_ExecuteRendererCommandsLoop();
   CL_Tickrate_Patch();
+  CL_Recoil_Patch();
 #ifdef COD4X_VOLUMETRIC_SMOKE
   CL_Smoke_Patch();
 #endif

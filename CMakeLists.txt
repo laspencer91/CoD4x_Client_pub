@@ -36,6 +36,7 @@ add_library(cod4x SHARED
     src/cl_tickrate.c
     src/cl_tickrate_core.c
     src/cl_recoil.c
+    src/cl_recoil_hooks.asm
     src/pmove.c
     src/xasset_loader.c
     src/xassets/font.c

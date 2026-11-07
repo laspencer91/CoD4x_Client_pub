@@ -30,7 +30,8 @@ int main(int argc, char **argv)
     assert(Recoil_Compatible(&contract, 0, 0)); /* legacy clients on native servers */
     assert(Recoil_Decode("1:1:ak74u,2500,3,7500", &contract));
     assert(contract.count == 1 && !strcmp(contract.weapons[0].weapon, "ak74u"));
-    assert(!Recoil_Compatible(&contract, 1, Recoil_RuntimeModels()));
+    assert(Recoil_Compatible(&contract, 1, Recoil_RuntimeModels())); /* model 1 is integrated */
+    assert(!Recoil_Compatible(&contract, 1, 1u << RECOIL_NATIVE));    /* a client without the hook */
     assert(!Recoil_Compatible(&contract, 0, 3));
     assert(Recoil_Compatible(&contract, 1, 3));
     assert(Recoil_Compatible(&contract, 2, 3)); /* newer reader retains v1 support */
@@ -45,6 +46,15 @@ int main(int argc, char **argv)
     Recoil_Fingerprint("1:1:ak74u,2500,3,7501", other);
     assert(strlen(fingerprint) == 16 && strcmp(fingerprint, other));
 
+    {   /* PromodFlex opening: 25% rising to full strength on the fourth shot at AK74u cadence. */
+        const recoil_weapon_t opening = {"ak74u", 2500, 4, 7500};
+        recoil_state_t burst = {0};
+        assert(Recoil_Fire(&burst, &opening, 78, 1000, 1) == 2500);
+        assert(Recoil_Fire(&burst, &opening, 78, 1078, 2) == 5000);
+        assert(Recoil_Fire(&burst, &opening, 78, 1156, 3) == 7500);
+        assert(Recoil_Fire(&burst, &opening, 78, 1234, 4) == 10000);
+        assert(Recoil_Fire(&burst, &opening, 78, 1312, 5) == 10000);
+    }
     assert(Recoil_Fire(&state, &ak, 78, 1000, 1) == 2500);
     assert(Recoil_Fire(&state, &ak, 78, 1078, 2) == 6250);
     checkpoint = state;

@@ -3,6 +3,7 @@
 #include "client.h"
 #include "cl_input.h"
 #include "cl_tickrate.h"
+#include "cl_recoil.h"
 #include "ui_shared.h"
 #include "win_sys.h"
 #include "snd_system.h"
@@ -1047,6 +1048,7 @@ void CL_InitOnceForAllClients(){
   Cvar_RegisterInt("rate", 25000, 3000, 100000, 3, "Player's preferred network rate");
   Cvar_RegisterInt("snaps", 20, 1, 125, 3, "Snapshot rate");
   CL_Tickrate_Init();
+  CL_Recoil_Init();
   Cvar_RegisterBool("cl_punkbuster", 1, 19, "Determines if PunkBuster is enabled");
   cl_password = Cvar_RegisterString("password", "", 2, "password");
   cl_nextdemo = Cvar_RegisterString("nextdemo", "", 0, "The next demo to play");
@@ -1316,6 +1318,7 @@ void CL_ClearState( void ) {
 
 	Com_Memset( &cl, 0, 0x1B1BDC /*sizeof( clientActive_t )*/ );
 	CL_Tickrate_Clear();
+	CL_Recoil_Clear();
 	Com_ClientDObjClearAllSkel();
 }
 
@@ -8613,6 +8616,7 @@ void CL_SystemInfoChanged( void ) {
 
 	systemInfo = CL_GetConfigString(CS_SYSTEMINFO);
 	CL_Tickrate_SystemInfoChanged(systemInfo);
+	CL_Recoil_SystemInfoChanged(systemInfo);
 //	Com_Printf(CON_CHANNEL_SYSTEM, "Sysinfo: %s\n", systemInfo);
 	// NOTE TTimo:
 	// when the serverId changes, any further messages we send to the server will use this new serverId

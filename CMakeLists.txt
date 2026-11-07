@@ -35,6 +35,7 @@ add_library(cod4x SHARED
     src/cl_main.c
     src/cl_tickrate.c
     src/cl_tickrate_core.c
+    src/cl_recoil.c
     src/pmove.c
     src/xasset_loader.c
     src/xassets/font.c
@@ -104,6 +105,21 @@ endif()
 
 option(VOLUMETRIC_SMOKE "Build the optional volumetric smoke renderer bridge" OFF)
 option(TICKRATE_TESTS "Build client history and packet pacing regression tests" OFF)
+option(RECOIL_TESTS "Build shared recoil model/contract regression tests" OFF)
+if(RECOIL_TESTS)
+    enable_testing()
+    add_executable(test_recoil tests/test_recoil.c)
+    target_include_directories(test_recoil PRIVATE src)
+    target_compile_options(test_recoil PRIVATE -m32 -std=c11 -Wall -Wextra -Werror -UNDEBUG)
+    target_link_options(test_recoil PRIVATE -m32 -static)
+    add_test(NAME recoil_core COMMAND test_recoil ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/recoil-contracts.tsv)
+    set(RECOIL_SERVER_SOURCE "" CACHE PATH "Optional dedicated-server source tree for shared-core drift checks")
+    if(RECOIL_SERVER_SOURCE)
+        find_package(Python3 COMPONENTS Interpreter REQUIRED)
+        add_test(NAME recoil_sync COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/sync-recoil.py
+            --check --server ${RECOIL_SERVER_SOURCE})
+    endif()
+endif()
 if(TICKRATE_TESTS)
     enable_testing()
     add_executable(test_cl_tickrate tests/test_cl_tickrate.c src/cl_tickrate_core.c)

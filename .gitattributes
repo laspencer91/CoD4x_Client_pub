@@ -7,3 +7,5 @@ external/rmlui/vendor/** -text -whitespace
 external/rmlui/patches/** -text -whitespace
 external/freetype/vendor/** -text -whitespace
 ui/rml/fonts/*.otf binary
+src/recoil/model.h text eol=lf
+tests/fixtures/recoil-contracts.tsv text eol=lf

@@ -85,7 +85,7 @@ bool BroadcastView::Prepare(const rml_host_t& host, int width, int height, doubl
     if (card_mode!=CardMode::Hidden) last_visible_mode=card_mode;
     compact=last_visible_mode==CardMode::Compact; hidden=card_mode==CardMode::Hidden;
     // Everything here is already on the client: team, scores and clock from the engine (CL_Rml_Value), the bomb
-    // and round from server info (ui_bomb_timer, ui_rml_round), and the observer roster from Promod's shoutcaster
+    // and round from server info (ui_bomb_timer, ui_round), and the observer roster from Promod's shoutcaster
     // slots (shout_*N).
     // Players see their own team on the left in Promod's friendly/enemy colours; observers see Allies/Axis.
     const auto viewer=value("rml_local_team");
@@ -94,7 +94,7 @@ bool BroadcastView::Prepare(const rml_host_t& host, int width, int height, doubl
     const Rml::String left=viewer=="axis" ? "axis" : "allies", right=left=="axis" ? "allies" : "axis";
     const int left_points=number("rml_score_"+left), right_points=number("rml_score_"+right);
     left_score=std::to_string(left_points); right_score=std::to_string(right_points);
-    round=value("ui_rml_round");
+    round=value("ui_round");
     // Observers use the scoreboard's faction colours; the stylesheet's team tokens remain the fallback.
     const Rml::String allies=observer ? value("rml_team_color_allies") : Rml::String(), axis=observer ? value("rml_team_color_axis") : Rml::String();
     if (allies+axis!=team_factions) { team_factions=allies+axis; team_style=TeamStyle(allies,axis); }

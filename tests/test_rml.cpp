@@ -158,7 +158,7 @@ int main(int argc, char** argv) {
         Require(RmlHost_SetSourceDirectory(client_source.c_str()) && RmlHost_SetModSourceDirectory(mod), "read passive HUD sources");
         // Engine values (CL_Rml_Value) plus Promod's shoutcaster slots; nothing HUD-specific comes from the server.
         economy_values={{"rml_local_team","spectator"},{"rml_score_allies","12"},{"rml_score_axis","3"},
-            {"rml_seconds_left","82"},{"ui_bomb_timer","0"},{"ui_rml_round","16"},{"cg_rmlCards","0"},{"rml_follow_client","2"}};
+            {"rml_seconds_left","82"},{"ui_bomb_timer","0"},{"ui_round","16"},{"cg_rmlCards","0"},{"rml_follow_client","2"}};
         const char* names[]={"^1Hi^7as","^5Cooper","^2Skubal","^3Korkunen","Giombi","Merboth","^1Biessman","Bumsky","^5Adamson","Guest"};
         for (int i=0;i<10;++i) {
             const auto slot=std::to_string(i);

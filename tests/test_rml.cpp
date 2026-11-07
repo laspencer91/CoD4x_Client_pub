@@ -55,7 +55,7 @@ int ReadFile(const char* path, void** buffer) {
     if (!ok) { std::free(*buffer); *buffer = nullptr; return -1; }
     return int(length);
 }
-void Log(const char* message) { ++warnings; std::fprintf(stderr, "RmlUi: %s\n", message); }
+void Log(const char* message) { if (std::strncmp(message, "Loaded font face", 16)) ++warnings; std::fprintf(stderr, "RmlUi: %s\n", message); }
 void Sound(const char* alias) { if (!std::strcmp(alias, "mouse_over")) ++hover_sounds; else if (!std::strcmp(alias, "mouse_click")) ++click_sounds; }
 
 struct Device {
@@ -141,6 +141,7 @@ bool Near(DWORD pixel, int r, int g, int b) {
 }
 
 int main(int argc, char** argv) {
+    if (const char* override_root = std::getenv("COD4X_RML_TEST_ROOT")) root = override_root;
     if (argc == 1) {
         std::freopen(RML_TEST_OUTPUT "/rml-desktop.log", "w", stdout);
         std::freopen(RML_TEST_OUTPUT "/rml-desktop-errors.log", "w", stderr);
@@ -150,21 +151,76 @@ int main(int argc, char** argv) {
     Require(RmlHost_Init(&host), "initialize actual core and FreeType");
     if (argc > 1 && std::strcmp(argv[1], "--economy") == 0) {
         fixture = false;
-        const char* mod = RML_SOURCE_ROOT "/../promod-econ-na/ui/rml";
+        const char* mod = std::getenv("COD4X_RML_TEST_MOD_SOURCE");
+        if (!mod) mod = RML_SOURCE_ROOT "/../promod-econ-na/ui/rml";
         if (GetFileAttributesA(mod) == INVALID_FILE_ATTRIBUTES) { std::puts("SKIP: sibling economy assets unavailable"); return 77; }
-        Require(RmlHost_SetSourceDirectory(RML_SOURCE_ROOT "/ui/rml") && RmlHost_SetModSourceDirectory(mod), "read shared and gameplay UI from their own authoring roots");
+        const std::string client_source = std::string(root) + "/ui/rml";
+        Require(RmlHost_SetSourceDirectory(client_source.c_str()) && RmlHost_SetModSourceDirectory(mod), "read shared and gameplay UI from their own authoring roots");
         Require(RmlHost_Open(RML_SCREEN_ECONOMY_PREVIEW), "open actual redesigned economy document");
         Device gpu; gpu.clear_color = D3DCOLOR_ARGB(255, 38, 38, 40);
-        gpu.Target(1280, 800); gpu.Render(10.0); gpu.Render(10.5);
+        gpu.Target(1280, 800); gpu.Render(10.0);
+        for (int frame = 1; frame <= 10; ++frame) gpu.Render(10.0 + frame * 0.05);
         auto* preview_doc = Rml::GetContext("cod4x")->GetDocument(0);
         auto* deploy = preview_doc->GetElementById("deploy");
         Require(deploy && deploy->GetAbsoluteOffset().y + deploy->GetBox().GetSize(Rml::BoxArea::Border).y <= 800,
             "deploy stays visible with the full loadout at 1280x800");
         Check(D3DXSaveSurfaceToFileA(RML_TEST_OUTPUT "/rml-economy.png", D3DXIFF_PNG, gpu.surface, nullptr, nullptr), "capture economy design");
+        for (const auto size : {Rml::Vector2i(1920,1080), Rml::Vector2i(1024,768), Rml::Vector2i(3440,1440)}) {
+            gpu.Target(size.x, size.y); gpu.Render(10.6);
+            auto* stage = preview_doc->GetElementById("economy-stage");
+            const auto offset = stage->GetAbsoluteOffset(); const auto dimensions = stage->GetBox().GetSize();
+            Require(offset.x >= -1 && offset.y >= -1 && offset.x + dimensions.x <= size.x + 1 && offset.y + dimensions.y <= size.y + 1,
+                "entire fixed-layout canvas fits the target viewport");
+            Require(std::abs(dimensions.x / dimensions.y - 1920.f / 1080.f) < 0.005f, "menu scale preserves the authored aspect ratio");
+            const std::string capture = std::string(RML_TEST_OUTPUT) + "/rml-economy-" + std::to_string(size.x) + ".png";
+            Check(D3DXSaveSurfaceToFileA(capture.c_str(), D3DXIFF_PNG, gpu.surface, nullptr, nullptr), "capture scaled economy layout");
+        }
+        gpu.Target(1280,800); gpu.Render(10.7);
+        auto click_button = [&](Rml::Element* button) {
+            const auto point = button->GetAbsoluteOffset(Rml::BoxArea::Border);
+            RmlHost_MouseMove(int(point.x+4), int(point.y+4)); RmlHost_Key(200,1,0); RmlHost_Key(200,0,0);
+        };
+        auto action_button = [&](const char* action) -> Rml::Element* {
+            Rml::ElementList inputs; preview_doc->GetElementsByTagName(inputs, "input");
+            for (auto* input : inputs) if (input->GetAttribute<Rml::String>("data-econ", "") == action) return input;
+            Require(false, "preview action exists"); return nullptr;
+        };
+        RmlHost_Key('q',1,0); RmlHost_Key('q',0,0); gpu.Render(10.701);
+        RmlHost_Key(RML_KEY_DOWNARROW,1,0); RmlHost_Key(RML_KEY_DOWNARROW,0,0);
+        RmlHost_Key(RML_KEY_ENTER,1,0); RmlHost_Key(RML_KEY_ENTER,0,0); gpu.Render(10.702);
+        Require(preview_doc->QuerySelector(".primary-art")->GetAttribute<Rml::String>("src", "")=="images/m4.tga", "preview weapon selection changes the displayed loadout");
+        RmlHost_Key('q',1,0); RmlHost_Key('q',0,0); gpu.Render(10.703);
+        auto* preview_drawer = preview_doc->GetElementById("primary-drawer");
+        auto panel_point = preview_drawer->QuerySelector(".picker-panel")->GetAbsoluteOffset();
+        RmlHost_MouseMove(int(panel_point.x+20),int(panel_point.y+20)); RmlHost_Key(200,1,0); RmlHost_Key(200,0,0); gpu.Render(10.704);
+        Require(preview_drawer->IsVisible(), "clicking modal panel content does not dismiss it");
+        RmlHost_MouseMove(1200,500); RmlHost_Key(200,1,0); RmlHost_Key(200,0,0); gpu.Render(10.705);
+        Require(!preview_drawer->IsVisible(), "clicking the backdrop dismisses the picker");
+        RmlHost_Key('q',1,0); RmlHost_Key('q',0,0); gpu.Render(10.706); preview_drawer->RemoveAttribute("dismiss-on-backdrop");
+        RmlHost_MouseMove(1200,500); RmlHost_Key(200,1,0); RmlHost_Key(200,0,0); gpu.Render(10.707);
+        Require(preview_drawer->IsVisible(), "generic modal can opt out of backdrop dismissal");
+        preview_drawer->SetAttribute("dismiss-on-backdrop", "true"); RmlHost_Key(RML_KEY_ESCAPE,1,0); RmlHost_Key(RML_KEY_ESCAPE,0,0); gpu.Render(10.708);
+        click_button(action_button("attachment:silencer")); gpu.Render(10.71);
+        click_button(preview_doc->GetElementById("buy-frag")); gpu.Render(10.72);
+        click_button(preview_doc->GetElementById("buy-armor")); gpu.Render(10.73);
+        Require(economy_requests.empty(), "preview shopping never sends live transactions");
+        Require(preview_doc->GetElementById("armor-charge-one")->IsClassSet("filled") &&
+            preview_doc->GetElementById("armor-charge-two")->IsClassSet("filled"), "preview armor purchase updates both charge segments");
+        click_button(action_button("repeat_buy")); gpu.Render(10.74);
+        Require(preview_doc->GetElementById("repeat-toggle")->IsClassSet("checked"), "preview toggle updates its simulated rebuy setting");
+        Check(D3DXSaveSurfaceToFileA(RML_TEST_OUTPUT "/rml-preview-cart.png", D3DXIFF_PNG, gpu.surface, nullptr, nullptr), "capture interactive preview purchases and saved rebuy rows");
+        Rml::ElementList moves; preview_doc->QuerySelectorAll(moves, ".rebuy-arrow");
+        Require(moves.size()==6 && moves[0]->HasAttribute("disabled") && moves[5]->HasAttribute("disabled"), "rebuy exposes right-aligned arrows with boundary controls disabled");
+        click_button(moves[4]); gpu.Render(10.8);
+        moves.clear(); preview_doc->QuerySelectorAll(moves, ".rebuy-arrow");
+        Require(moves[2]->GetAttribute<Rml::String>("data-value", "")=="armor", "preview up arrow actually moves armor earlier");
+        click_button(moves[3]); gpu.Render(10.9);
         Require(RmlHost_ActionAllowed("buy_armor") && RmlHost_ActionAllowed("give:player_123_4") &&
             !RmlHost_ActionAllowed("buy_armor;quit") && !RmlHost_ActionAllowed("pick_primary:8") &&
             !RmlHost_ActionAllowed("give:player_1_2\""), "economy response allowlist rejects command syntax and invalid rows");
         economy_values = {{"economy_cash","100"},{"economy_buy_open","1"},{"economy_purchase_allowed","1"},{"flat_has_class","1"},
+            {"economy_repeat_order","attachment,frag,armor"},
+            {"economy_repeat_attachment","silencer"},{"economy_repeat_frag","1"},{"economy_repeat_armor","2"},
             {"loadout_class","assault"},{"loadout_primary","ak47"},{"loadout_secondary","deserteagle"},{"loadout_primary_attachment","none"},
             {"flat_primary_rows","1"},{"flat_primary_0_ref","ak47"},{"economy_armor_price","100"},{"economy_can_buy_armor","1"},
             {"economy_armor_capacity","2"},{"flat_buy_seconds","24"},{"economy_frag_price","100"},{"economy_can_buy_frag","1"}};
@@ -177,12 +233,51 @@ int main(int argc, char** argv) {
         Require(economy_requests.size()==1 && economy_requests.back()=="buy_armor", "native click submits existing armor response without local debit");
         Require(economy_values["economy_cash"]=="100", "client never changes authoritative cash");
         economy_values["economy_buy_open"]="0"; economy_values["economy_purchase_allowed"]="0"; economy_values["economy_can_buy_armor"]="0";
+        economy_values["economy_can_buy_frag"]="0";
         gpu.Render(11.3); Require(armor->HasAttribute("disabled"), "buy expiry disables the purchase surface");
         RmlHost_Key(200,1,0); RmlHost_Key(200,0,0); Require(economy_requests.size()==1, "disabled purchase submits no request");
         Require(RmlHost_Reload(), "live economy reload keeps authoritative state"); gpu.Render(11.6);
         Require(Rml::GetContext("cod4x")->GetDocument(0)->GetElementById("buy-armor")->HasAttribute("disabled"), "closed-buy state survives hot reload");
         Check(D3DXSaveSurfaceToFileA(RML_TEST_OUTPUT "/rml-economy-closed.png", D3DXIFF_PNG, gpu.surface, nullptr, nullptr), "capture closed economy state");
-        Require(warnings<=1, "economy parses without model or stylesheet diagnostics");
+        auto* live_doc = Rml::GetContext("cod4x")->GetDocument(0);
+        RmlHost_Key('q',1,0); RmlHost_Key('q',0,0); gpu.Render(11.7);
+        Require(live_doc->GetElementById("primary-drawer")->IsVisible(), "Q opens the primary picker without spending cash");
+        RmlHost_Key('q',1,0); RmlHost_Key('q',0,0); gpu.Render(11.8);
+        Require(!live_doc->GetElementById("primary-drawer")->IsVisible(), "Q closes its own picker");
+        RmlHost_Key('z',1,0); RmlHost_Key('z',0,0); RmlHost_Key('x',1,0); RmlHost_Key('x',0,0);
+        Require(economy_requests.size()==1, "equipment shortcuts cannot buy after phase expiry");
+        auto* irons = live_doc->GetElementById("primary-none"); const auto irons_point = irons->GetAbsoluteOffset();
+        RmlHost_MouseMove(int(irons_point.x+10),int(irons_point.y+10)); RmlHost_Key(200,1,0); RmlHost_Key(200,0,0); gpu.Render(11.9);
+        Require(economy_requests.back()=="attachment:none" && !live_doc->GetElementById("primary-drawer")->IsVisible(),
+            "attachment control submits its own action without opening the card picker");
+        RmlHost_Key(RML_KEY_SPACE,1,0); RmlHost_Key(RML_KEY_SPACE,0,0);
+        Require(economy_requests.back()=="deploy", "Space uses the existing deploy response");
+        Require(RmlHost_Open(RML_SCREEN_PALETTE), "switch from letterboxed economy to palette"); gpu.Render(12.0);
+        Require(Rml::GetContext("cod4x")->GetDensityIndependentPixelRatio() == 1.f, "palette restores its own authoring density");
+        Require(RmlHost_Open(RML_SCREEN_ECONOMY), "switch back to the live economy"); gpu.Render(13.0);
+        auto* restored_stage = Rml::GetContext("cod4x")->GetDocument(0)->GetElementById("economy-stage");
+        Require(std::abs(restored_stage->GetBox().GetSize().x - 1280.f) < 1, "economy restores its scale after switching screens");
+        auto* restored_doc = Rml::GetContext("cod4x")->GetDocument(0);
+        moves.clear(); restored_doc->QuerySelectorAll(moves, ".rebuy-arrow"); click_button(moves[4]); gpu.Render(13.1);
+        Require(economy_requests.back()=="rebuy_up:armor" && economy_values["economy_cash"]=="100", "live arrow sends only an allowlisted priority change without debiting cash");
+        economy_values["economy_repeat_order"]="attachment,armor,frag"; gpu.Render(13.2);
+        moves.clear(); restored_doc->QuerySelectorAll(moves, ".rebuy-arrow");
+        Require(moves[2]->GetAttribute<Rml::String>("data-value", "")=="armor", "live priority display follows the server-published order");
+        auto* live_toggle = restored_doc->GetElementById("repeat-toggle");
+        click_button(live_toggle->QuerySelector("input")); gpu.Render(13.21);
+        Require(economy_requests.back()=="repeat_buy" && !live_toggle->IsClassSet("checked"), "controlled live toggle waits for server confirmation");
+        economy_values["economy_repeat_enabled"]="1"; gpu.Render(13.22);
+        Require(live_toggle->IsClassSet("checked"), "controlled toggle reflects the confirmed server value");
+        Require(!RmlHost_ActionAllowed("rebuy_up:invalid") && !RmlHost_ActionAllowed("rebuy_down:armor;quit"), "rebuy allowlist rejects unknown items and command syntax");
+        economy_values["flat_primary_rows"]="3"; economy_values["flat_primary_1_ref"]="m4"; economy_values["flat_primary_2_ref"]="m16"; gpu.Render(13.3);
+        RmlHost_Key('q',1,0); RmlHost_Key('q',0,0); gpu.Render(13.4);
+        Require(Rml::GetContext("cod4x")->GetFocusElement()->GetAttribute<Rml::String>("data-value", "")=="0", "picker opens focused on the equipped weapon");
+        RmlHost_Key(RML_KEY_DOWNARROW,1,0); RmlHost_Key(RML_KEY_DOWNARROW,0,0); gpu.Render(13.45);
+        Require(Rml::GetContext("cod4x")->GetFocusElement()->GetAttribute<Rml::String>("data-value", "")=="1", "Down moves picker focus to the next weapon");
+        Check(D3DXSaveSurfaceToFileA(RML_TEST_OUTPUT "/rml-strikepoint-picker.png", D3DXIFF_PNG, gpu.surface, nullptr, nullptr), "capture indexed picker with actual artwork and focused row");
+        RmlHost_Key(RML_KEY_ENTER,1,0); RmlHost_Key(RML_KEY_ENTER,0,0); gpu.Render(13.5);
+        Require(economy_requests.back()=="pick_primary:1" && !restored_doc->GetElementById("primary-drawer")->IsVisible(), "Enter equips the focused picker entry and closes the drawer");
+        Require(warnings==0, "economy parses without model or stylesheet diagnostics");
         RmlHost_Shutdown(); RmlHost_SetSourceDirectory(nullptr); RmlHost_SetModSourceDirectory(nullptr);
         std::puts("RML_ECONOMY_CHECKS_PASSED"); return 0;
     }
@@ -236,7 +331,7 @@ int main(int argc, char** argv) {
         Check(D3DXSaveSurfaceToFileA(RML_TEST_OUTPUT "/rml-decrypt-settled.png", D3DXIFF_PNG, gpu.surface, nullptr, nullptr), "capture settled decrypt component");
         Require(RmlHost_Reload(), "reload a document containing the custom component"); gpu.Render(114.0);
         Require(Rml::GetContext("cod4x")->GetDocument(0)->GetElementById("decrypt-probe") != nullptr, "custom component survives document replacement");
-        Require(warnings <= 1, "decrypt component loads without model or stylesheet warnings");
+        Require(warnings == 0, "decrypt component loads without model or stylesheet warnings");
         RmlHost_Shutdown(); return 0;
     }
     if (argc > 1 && std::strcmp(argv[1], "--palette") == 0) {
@@ -295,7 +390,7 @@ int main(int argc, char** argv) {
         gpu.Render(56.2);
         Require(reveal->GetBox().GetSize().x == settled_width, "motion settles without looping or collapsing text");
         Require(RmlHost_Open(RML_SCREEN_DIAGNOSTIC), "switch back to diagnostic through typed screen API");
-        Require(warnings <= 1, "palette loads without warnings");
+        Require(warnings == 0, "palette loads without warnings");
         RmlHost_Shutdown(); return 0;
     }
     if (argc > 1 && std::strcmp(argv[1], "--source") == 0) {

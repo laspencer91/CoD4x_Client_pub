@@ -61,7 +61,7 @@ Reference: `laspencer91/ProlineUnreal` revision `396a54108ac71a3960c51a7a7be4c8f
 | Arrival | 180 ms exponential-out translate/opacity settle. | Menu panels and updated selections. |
 | Response states | Green amount punch, muted red denial text and disabled controls. | State vocabulary; sample values make no purchases. |
 
-Replay restarts the sample timelines; all seventeen samples share the same source reload and local action route. Initial layout resolves before text/control geometry is recorded. Resizing receives a second layout update before recording at the new density.
+Replay restarts the sample timelines; all eighteen samples share the same source reload and local action route. Initial layout resolves before text/control geometry is recorded. Resizing receives a second layout update before recording at the new density.
 
 The next renderer features are explicit: layer compositing and correct clipping first, then Proline's row-band/RGB glitch and noise dissolve. Grime needs a blurred silhouette; scene blur needs a separate scene capture. Decorative particles need a bounded emitter and batched geometry, rather than a DOM element per particle. None of those backend features is implied by adding their RCSS declarations. The development economy bridge is implemented; remaining native acceptance and packaging scope is recorded in the mod's `docs/rml-adoption.md`.
 
@@ -95,7 +95,7 @@ Game assets downloaded for this workspace live under `C:\development\games\cod4`
 
 ## Economy and expanded palette follow-up
 
-The palette contains seventeen samples: six original effects, six economy components, four briefing/motion effects and a reusable decrypt-text element. `TEST_ISOLATION` shortcuts are F7 for the economy fixture, F8 for the palette and F9 to reload the current screen. `rml_economy_preview` and `rml_palette` provide console equivalents. The preview does not spend live cash.
+The palette contains eighteen samples: six original effects, six economy components, four briefing/motion effects and a reusable decrypt-text element. `TEST_ISOLATION` shortcuts are F7 for the economy fixture, F8 for the palette and F9 to reload the current screen. `rml_economy_preview` and `rml_palette` provide console equivalents. The preview does not spend live cash.
 
 The runner watches the client `ui/rml` and sibling mod `ui/rml` roots together. Mod assets override shared paths. The current economy uses charcoal texture-gradient panels and stock HUD icons; weapon exports preserve source pixels inside padded 2:1 canvases. Shader-backed CSS gradients remain unsupported.
 
@@ -138,3 +138,17 @@ Each character cycles through two or three distinct uppercase letters/digits, th
 The component reserves the final text's width, paints the changing string above it and updates text geometry only when the string changes. Final characters are ordinary text nodes, so markup in `text` is not parsed as child elements. Animation is bounded to 256 UTF-8 code points and a 4096-byte input for parsing; longer input is shown immediately. Elapsed-time advancement skips missed phases on slow frames rather than building a backlog. It runs once and settles, without a timer thread or gameplay action. Source/document reload recreates the element and restarts from the authored text.
 
 F8 sample **17 / Decrypt Text** provides separate replay and slow-preview controls. The global Replay Effects route also restarts decrypt elements. [D3D9 evidence](evidence/2026-11-06-rml-decrypt.md) records tests and captures.
+
+## Strikepoint economy layout
+
+The sibling mod's user-supplied Strikepoint handoff now governs the economy layout. The host uses a 1920x1080 authoring density only for economy/live preview screens; diagnostic and palette remain at their existing 1280x800 density. The centered stage scales uniformly with black letterboxing. Density changes trigger a second layout update even when the window size does not change, covering F7/F8 screen switching.
+
+Economy fonts are loaded lazily from mod assets: Saira Condensed regular/semibold (mapped to the bold style) and Share Tech Mono. The mod includes their OFL licenses and source hashes. Missing fonts fail economy opening so the engine adapter can preserve the native menu. The palette does not acquire this dependency.
+
+Existing teammate dvars now supply weapon and tactical thumbnails. The layout does not invent teammate armor data. The rebuy panel shows saved paid equipment and server-controlled reorder arrows. Keyboard Q/E toggles a picker, 1-9 selects its entry, Z/X requests an eligible armor/frag purchase or refund, C swaps tactical and Space deploys. Modal confirmation blocks those background actions. Attachment controls are siblings of the full-card picker hit area, so buying an attachment does not also open the picker.
+
+The presentation keeps the original game cursor, grey gradient cards, amber selection and green cash/ownership. Context text briefly uses the decrypt component; Deploy uses the existing one-shot power-on recipe. Prices, cash and purchase controls do not wait for an entry sequence. Gradients/scrim/hologram fields are textures supported by the current renderer; no scene-blur/filter/particle backend is implied. The supplied Crash backdrop appears only in the fixture; live menus retain their game scene. The open center is reserved for future hero art rather than stretching stock HUD icons into a hero render.
+
+The full client builds and all six CTests pass. The economy check verifies viewport containment and authored aspect ratio at 1920x1080, 1024x768 and 3440x1440, Deploy visibility at 1280x800, eligible armor dispatch, closed-buy rejection, keyboard/card behavior and density restoration. Informational font loads are excluded from test warning counts; parse/style/model diagnostics still fail the clean-document checks. See the mod's `docs/evidence/2026-11-06-strikepoint.md` for captures and scope.
+
+Reusable controls, styling ownership and preview behavior: [component guide](rml-components.md).

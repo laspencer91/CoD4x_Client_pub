@@ -1,4 +1,4 @@
-add_library(cod4x_rml STATIC frame.cpp d3d9_renderer.cpp runtime.cpp source.cpp effects.cpp economy.cpp decrypt_text.cpp)
+add_library(cod4x_rml STATIC frame.cpp d3d9_renderer.cpp runtime.cpp source.cpp effects.cpp economy.cpp economy_preview.cpp decrypt_text.cpp toggle.cpp modal.cpp)
 target_compile_features(cod4x_rml PUBLIC cxx_std_17)
 target_compile_definitions(cod4x_rml PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
 target_compile_options(cod4x_rml PRIVATE -m32 -O2 -Wall -Wextra)

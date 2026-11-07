@@ -5,6 +5,7 @@
     <link type="text/rcss" href="shared/economy-kit.rcss" />
     <link type="text/rcss" href="shared/tactical.rcss" />
     <link type="text/rcss" href="shared/decrypt-text.rcss" />
+    <link type="text/rcss" href="shared/hardware.rcss" />
     <link type="text/rcss" href="palette.rcss" />
 </head>
 <body data-model="diagnostic" class="playing">
@@ -44,6 +45,7 @@
             <div class="recipe">&lt;decrypt-text text="SECURE THE SITE" tick-ms="18" cycles="3" glitch="glitch" /&gt;</div>
             <div class="note">2-3 rapid letters or digits per character, then lock. Optional 1dp glitch; no symbols in the scramble.</div>
         </div>
+        <div class="kit-section hardware-ui"><div class="label">18 / HARDWARE CONTROLS</div><div class="preview surface-card scanlined"><div class="hardware-toggle-example"><span>AUTO-REBUY</span><ui-toggle id="palette-toggle" data-action="toggle-demo" data-attrif-checked="toggle_demo" /></div><div class="charge-meter hardware-armor-example"><span class="charge-segment filled" /><span class="charge-segment" /></div></div><div class="recipe">ui-toggle / .charge-meter / .surface-card.scanlined</div><div class="note">Controlled switch, two charge segments and shared hardware texture.</div></div>
         <div class="footer eyebrow">F7 ECONOMY PREVIEW / SAVE RML &amp; RCSS TO UPDATE / F9 MANUAL RELOAD / ESC CLOSE</div>
     </div>
 </body>

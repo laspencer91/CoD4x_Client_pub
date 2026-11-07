@@ -40,3 +40,5 @@ h1 { font-size: 36dp; font-weight: normal; letter-spacing: 3dp; margin: 4dp 0 0;
 .decrypt-numbers { color: var(--muted); font-size: 15dp; letter-spacing: 2dp; }
 .decrypt-controls { display: flex; }
 .decrypt-controls input.control { width: 180dp; margin: 10dp 12dp 0 0; height: 34dp; padding: 6dp 12dp; font-size: 12dp; }
+
+.hardware-toggle-example { width: 300dp; height: 32dp; position: relative; font-size: 15dp; }.hardware-toggle-example ui-toggle { position: absolute; right: 0; top: 0; }.hardware-armor-example { width: 300dp; margin-top: 24dp; }

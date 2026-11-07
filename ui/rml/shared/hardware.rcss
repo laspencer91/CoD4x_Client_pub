@@ -1,0 +1,56 @@
+/* Reusable CoD4 surfaces and controls; opt in with .hardware-ui. */
+.hardware-ui .surface-card {
+    position: relative; box-sizing: border-box;
+    background-color: #191c1bc9;
+    decorator: image(../images/panel-gradient.tga);
+    border: 1dp #ffffff1c; border-top-color: #ffffff2a;
+}
+.hardware-ui .surface-card.scanlined {
+    decorator: image(../images/panel-gradient.tga), image(../images/card-scanlines.tga repeat);
+}
+.hardware-ui input.control.hit-area {
+    position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+    margin: 0; padding: 0; border: 0; background-color: transparent;
+}
+.hardware-ui input.control.hit-area:hover, .hardware-ui input.control.hit-area:focus {
+    background-color: #ffffff0c; border: 1dp #ffffff55;
+}
+.hardware-ui input.control.scanline-focus:hover, .hardware-ui input.control.scanline-focus:focus {
+    decorator: image(../images/card-scanlines.tga repeat);
+}
+.hardware-ui input.control.hit-area:disabled { background-color: transparent; color: #5f665e; border-color: #ffffff14; }
+.hardware-ui .attachment-tile.selected {
+    border-color: #d9ba7090; background-color: #d9ba701c;
+    decorator: image(../images/card-scanlines.tga repeat);
+}
+.hardware-ui .keycap {
+    display: inline-block; border: 1dp #ffffff40; padding: 0 4dp;
+    font-size: 11dp; letter-spacing: 0; color: #b7bdb4;
+}
+.hardware-ui input.control.centered-button { padding: 0; text-align: center; white-space: nowrap; }
+.hardware-ui input.control.holo-action {
+    border: 0; border-top: 1dp #d9ba7050; border-bottom: 1dp #d9ba7028;
+    background-color: transparent; color: #eef2ec; decorator: image(../images/deploy-field.tga);
+}
+.hardware-ui input.control.holo-action:hover, .hardware-ui input.control.holo-action:focus {
+    color: #fff3d8; background-color: #d9ba7012; border-top-color: var(--accent);
+}
+.hardware-ui input.control.holo-action:disabled { color: #5f665e; opacity: 0.45; }
+@keyframes hardware-context { from { opacity: 0; transform: translateY(-6dp); } to { opacity: 1; transform: translateY(0dp); } }
+@keyframes hardware-panel { from { opacity: 0; transform: translateY(8dp); } to { opacity: 1; transform: translateY(0dp); } }
+
+/* Controlled toggle: checked/disabled come from the consumer's model. */
+ui-toggle { display: inline-block; position: relative; width: 82dp; height: 23dp; }
+ui-toggle input.control.toggle-hit { position: absolute; left: 0; top: 0; width: 100%; height: 100%; padding: 0; margin: 0; border: 0; background-color: transparent; }
+ui-toggle .toggle-label { position: absolute; left: 0; top: 5dp; color: var(--muted); font-size: 11dp; letter-spacing: 1dp; pointer-events: none; }
+ui-toggle .toggle-track { position: absolute; top: 0; right: 0; width: 36dp; height: 22dp; border: 1dp #ffffff35; background-color: #080b0990; pointer-events: none; }
+ui-toggle .toggle-thumb { position: absolute; left: 2dp; top: 2dp; width: 14dp; height: 18dp; background-color: #92978e; transition: transform 0.12s exponential-out, background-color 0.12s exponential-out; }
+ui-toggle.checked .toggle-thumb { transform: translateX(18dp); background-color: var(--accent); }
+ui-toggle.checked .toggle-label { color: var(--accent); }
+ui-toggle.disabled { opacity: 0.4; }
+ui-toggle input.toggle-hit:hover ~ .toggle-track, ui-toggle input.toggle-hit:focus ~ .toggle-track { border-color: var(--accent); }
+
+.hardware-ui .charge-meter { display: flex; height: 8dp; }
+.hardware-ui .charge-segment { box-sizing: border-box; width: 48%; height: 8dp; margin-right: 4%; border: 1dp #5bb4ec40; background-color: #5bb4ec18; decorator: image(../images/panel-gradient.tga); }
+.hardware-ui .charge-segment:last-child { margin-right: 0; }
+.hardware-ui .charge-segment.filled { border-color: #5bb4ecb0; background-color: #5bb4ec99; }

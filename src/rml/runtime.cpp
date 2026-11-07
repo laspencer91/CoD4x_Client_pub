@@ -4,6 +4,8 @@
 #include "source.hpp"
 #include "effects.hpp"
 #include "decrypt_text.hpp"
+#include "toggle.hpp"
+#include "modal.hpp"
 #include "economy.hpp"
 #include "native_keys.h"
 #include <RmlUi/Core.h>
@@ -21,6 +23,7 @@ Source source;
 Source mod_source;
 EconomyView economy;
 bool economy_screen = false, economy_preview = false;
+bool economy_fonts_loaded = false;
 uint32_t source_reloads = 0, source_failures = 0;
 
 class System final : public Rml::SystemInterface {
@@ -91,6 +94,7 @@ bool want_replay = false;
 std::set<Rml::Input::KeyIdentifier> pressed_keys;
 bool pressed_buttons[5] = {};
 int activations = 0;
+bool toggle_demo = false;
 Rml::String status = "Select a control to check focus and local audio.";
 Rml::String focused_control;
 double last_hover = -1;
@@ -108,6 +112,12 @@ class Events final : public Rml::EventListener {
 public:
     void ProcessEvent(Rml::Event& event) override {
         if (!visible) return;
+        if (event.GetType() == "modalclose") {
+            const auto action = event.GetTargetElement()->GetAttribute<Rml::String>("dismiss-action", "");
+            if (economy_screen) economy.Dismiss(action, host, economy_preview, now);
+            else if (action == "close") want_close = true;
+            return;
+        }
         if (economy_screen) {
             if (economy.Event(event, host, economy_preview, now)) want_close = true;
             return;
@@ -126,6 +136,11 @@ public:
         if (type != "click") return;
         const auto action = control->GetAttribute<Rml::String>("data-action", "");
         if (action == "close") { want_close = true; return; }
+        if (action == "toggle-demo") {
+            toggle_demo = !toggle_demo; model.DirtyVariable("toggle_demo");
+            if (host.play_sound) host.play_sound("mouse_click");
+            return;
+        }
         if (action == "replay-decrypt" || action == "decrypt-speed") {
             if (action == "decrypt-speed") {
                 Rml::ElementList elements; document->GetElementsByTagName(elements, "decrypt-text");
@@ -186,11 +201,14 @@ extern "C" int RmlHost_Init(const rml_host_t* services) {
     if (!Rml::Initialise()) return 0;
     RegisterEffects();
     RegisterDecryptText();
+    RegisterToggle();
+    RegisterModal();
     initialized = true;
     context = Rml::CreateContext("cod4x", {1280, 800});
     if (!context) { RmlHost_Shutdown(); return 0; }
     auto constructor = context->CreateDataModel("diagnostic");
     constructor.Bind("status", &status); constructor.Bind("activations", &activations);
+    constructor.Bind("toggle_demo", &toggle_demo);
     model = constructor.GetModelHandle();
     economy.Init(context);
     if (!Rml::LoadFontFace("ui/rml/fonts/SourceSansPro-Regular.otf")) { RmlHost_Shutdown(); return 0; }
@@ -207,6 +225,7 @@ extern "C" void RmlHost_Shutdown() {
     context = nullptr; document = nullptr; initialized = false; model = {};
     document_path = "ui/rml/diagnostic.rml"; want_replay = false;
     economy_screen = economy_preview = false;
+    economy_fonts_loaded = false;
 }
 
 extern "C" int RmlHost_Show() {
@@ -216,7 +235,7 @@ extern "C" int RmlHost_Show() {
     if (!document) {
         document = context->LoadDocument(document_path);
         if (!document) return 0;
-        for (const char* type : {"click", "mouseover", "focus", "mousedown", "keydown", "contextmenu"}) document->AddEventListener(type, &events, true);
+        for (const char* type : {"click", "mouseover", "focus", "mousedown", "keydown", "modalclose"}) document->AddEventListener(type, &events, true);
     }
     want_close = false; visible = true; focused_control.clear(); last_hover = now;
     document->Show();
@@ -251,11 +270,11 @@ extern "C" int RmlHost_Reload() {
         return 0;
     }
     if (document) {
-        for (const char* type : {"click", "mouseover", "focus", "mousedown", "keydown", "contextmenu"}) document->RemoveEventListener(type, &events, true);
+        for (const char* type : {"click", "mouseover", "focus", "mousedown", "keydown", "modalclose"}) document->RemoveEventListener(type, &events, true);
         document->Close(); document = nullptr; context->Update();
     }
     document = replacement;
-    for (const char* type : {"click", "mouseover", "focus", "mousedown", "keydown", "contextmenu"}) document->AddEventListener(type, &events, true);
+    for (const char* type : {"click", "mouseover", "focus", "mousedown", "keydown", "modalclose"}) document->AddEventListener(type, &events, true);
     return was_visible ? RmlHost_Show() : 1;
 }
 
@@ -266,6 +285,12 @@ extern "C" int RmlHost_Open(rml_screen_t screen) {
     else if (screen == RML_SCREEN_PALETTE) path = "ui/rml/palette.rml";
     else if (screen == RML_SCREEN_ECONOMY || screen == RML_SCREEN_ECONOMY_PREVIEW) path = "ui/rml/economy.rml";
     else return 0;
+    if ((screen == RML_SCREEN_ECONOMY || screen == RML_SCREEN_ECONOMY_PREVIEW) && !economy_fonts_loaded) {
+        if (!Rml::LoadFontFace("ui/rml/fonts/SairaCondensed-Regular.ttf") ||
+            !Rml::LoadFontFace("ui/rml/fonts/SairaCondensed-SemiBold.ttf", false, Rml::Style::FontWeight::Bold) ||
+            !Rml::LoadFontFace("ui/rml/fonts/ShareTechMono-Regular.ttf")) return 0;
+        economy_fonts_loaded = true;
+    }
     const bool previous_economy = economy_screen, previous_preview = economy_preview;
     economy_screen = screen == RML_SCREEN_ECONOMY || screen == RML_SCREEN_ECONOMY_PREVIEW;
     economy_preview = screen == RML_SCREEN_ECONOMY_PREVIEW;
@@ -334,12 +359,16 @@ extern "C" uint32_t RmlHost_Record(int width, int height, double seconds) {
         else { ++source_failures; if (host.log) host.log("source reload failed; previous document retained"); }
     }
     if (economy_screen) economy.Update(host, economy_preview, now);
-    const bool resized = context->GetDimensions() != Rml::Vector2i(width, height);
+    const float density = economy_screen ? std::max(0.25f, std::min(width / 1920.f, height / 1080.f)) :
+        std::max(0.5f, std::min(width / 1280.f, height / 800.f));
+    const bool resized = context->GetDimensions() != Rml::Vector2i(width, height) ||
+        context->GetDensityIndependentPixelRatio() != density;
     context->SetDimensions({width, height});
-    context->SetDensityIndependentPixelRatio(std::max(0.5f, std::min(width / 1280.f, height / 800.f)));
+    context->SetDensityIndependentPixelRatio(density);
     if (want_replay && document) { document->SetClass("playing", false); context->Update(); document->SetClass("playing", true); ReplayDecryptText(document); want_replay = false; }
     context->Update();
     if (resized) context->Update();
+    if (economy_screen && economy.ResolveFocus()) context->Update();
     recorder.Begin(width, height); context->Render(); auto frame = recorder.End();
     std::lock_guard<std::mutex> lock(frames_mutex);
     // A discarded native command queue cannot retain an unbounded number of frames.

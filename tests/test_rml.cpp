@@ -215,6 +215,11 @@ int main(int argc, char** argv) {
         moves.clear(); preview_doc->QuerySelectorAll(moves, ".rebuy-arrow");
         Require(moves[2]->GetAttribute<Rml::String>("data-value", "")=="armor", "preview up arrow actually moves armor earlier");
         click_button(moves[3]); gpu.Render(10.9);
+        const auto armor_point = preview_doc->GetElementById("buy-armor")->GetAbsoluteOffset(Rml::BoxArea::Border);
+        RmlHost_MouseMove(int(armor_point.x+4), int(armor_point.y+4));
+        RmlHost_Key(RML_KEY_MOUSE2,1,0); RmlHost_Key(RML_KEY_MOUSE2,0,0); gpu.Render(10.91);
+        Require(!preview_doc->GetElementById("armor-charge-one")->IsClassSet("filled") && economy_requests.empty(),
+            "right-click refunds owned armor even when the purchase control is disabled");
         Require(RmlHost_ActionAllowed("buy_armor") && RmlHost_ActionAllowed("give:player_123_4") &&
             !RmlHost_ActionAllowed("buy_armor;quit") && !RmlHost_ActionAllowed("pick_primary:8") &&
             !RmlHost_ActionAllowed("give:player_1_2\""), "economy response allowlist rejects command syntax and invalid rows");

@@ -4277,6 +4277,7 @@ void CL_WritePacket( void ) {
 	int i;
 	usercmd_t *cmd, *oldcmd;
 	usercmd_t nullcmd;
+	usercmd_t wire[MAX_PACKET_USERCMDS];
 	int packetNum;
 	int oldPacketNum;
 	int count, key;
@@ -4379,9 +4380,10 @@ void CL_WritePacket( void ) {
 		// also use the last acknowledged server command in the key
 		key ^= Com_HashKey( clc.serverCommands[ clc.serverCommandSequence & ( MAX_RELIABLE_COMMANDS - 1 ) ], 32 );
 
-		// write all the commands, including the predicted command
+		// write all the commands, including the predicted command (server-authoritative recoil sends aim only)
+		CL_Recoil_WireCommands( wire, cl.cmdNumber - count + 1, count, &nullcmd );
 		for ( i = 0 ; i < count ; i++ ) {
-			cmd = &cl.cmds[( cl.cmdNumber - count + i + 1 ) & CMD_MASK];
+			cmd = &wire[i];
 			MSG_WriteDeltaUsercmdKey( &buf, key, oldcmd, cmd );
 			oldcmd = cmd;
 		}
@@ -7539,6 +7541,10 @@ void CL_ParseServerMessage( msg_t *compressmsg ) {
 				CL_ParseConfigClientData( msg );
 				break;
 
+			case svc_recoil:
+				CL_Recoil_ParseCorrection( msg );
+				break;
+
 		}
 	}
 }
@@ -9615,6 +9621,10 @@ void CL_FinishMove(usercmd_t *cmd)
 		cmd->angles[1] = ANGLE2SHORT(client->vehicleViewYaw);
 		cmd->angles[2] = 0;
 		cmd->angles[0] = ANGLE2SHORT(client->vehicleViewPitch);
+	}
+	else
+	{
+		CL_Recoil_FoldCommand(cmd);
 	}
 
 }

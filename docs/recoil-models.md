@@ -1,99 +1,87 @@
-# Server-owned recoil models
+# Recoil models
 
-Models **0/native** and **1/continuous** are integrated.
+Recoil that moves the aim (view kick) is a deterministic simulation shared by the client and the
+dedicated server. The server is authoritative: the client sends aim without kick, the server adds its own
+simulated kick to each usercmd, and the client predicts the same values for the screen. Design, evidence
+and review answers: [authoritative-recoil.md](authoritative-recoil.md);
+[verified facts](evidence/2026-11-07-authoritative-recoil-facts.md).
 
-View kick only moves the shooter's own aim: the cgame's local-player `CG_FireWeapon` path calls
-`BG_WeaponFireRecoil` (`0x41A7B0`, call site `0x457D2E`) and adds the result to `cg.kickAVel` /
-`cg.vGunSpeed`; the server's `G_PlayerEvent` computes the same values and discards the view kick
-(source inspection of `iw3mp.exe` 1.7 and the server's `_g_active_mp.asm`). So a model needs no
-player-state, prediction or snapshot change. `cl_recoil.c` replaces that call
-(`cl_recoil_hooks.asm`), runs the native function, then scales the shot's kick by the model's
-multiplier. Direction and randomness stay native. The hook checks the call bytes before patching,
-and the client advertises non-native models only while it is installed.
+Model IDs are permanent:
 
-The engine's per-burst counter `weaponShotCount` only counts burst-fire weapons, so model 1 keeps
-its own per-shot state on the client, keyed to the current weapon and reset when the weapon changes
-or time goes backwards.
+- **0/native** is stock CoD4. It is never simulated, and stock clients may play.
+- **1/continuous** is the opening ramp: each burst starts at `opening` of the native kick and reaches
+  full strength on shot `full_shot`.
 
-## Ownership and selection
+## Code layout
 
-The dedicated server registers `recoil_model`, default 0. Set it before the first map;
-the first successful selection locks for the process lifetime. Restart the process to
-change it. `recoil_status` lists the requested/effective selection, protocol, supported
-model mask and published contract. Model IDs are permanent: 0/native, 1/continuous;
-a later model receives a new ID rather than changing model 1's meaning.
+| File | Role |
+|---|---|
+| `src/recoil/sim.h` | The simulation and the model interface. Integer state (micro-degrees, milli-degrees/s). The native shot (`BG_WeaponFireRecoil`'s view kick with hashed randomness). Native recovery (`CG_KickAngles` in 5 ms slices on an absolute-time grid). Advance, shot, the usercmd offset, and the correction message format. |
+| `src/recoil/engine.h` | Engine rules both sides must read identically: fire events, own and live player, weapon slot, input sampling thresholds, the usercmd fold, gun-kick scaling. |
+| `src/recoil/models/*.h` | One file per model. |
+| `src/recoil/model.h` | The contract: model registry, wire decoder, capability check, per-weapon profile lookup. |
+| `src/cl_recoil.c` (+ `cl_recoil_hooks.asm`) | Client glue. Folds the offset into each new command (`CL_FinishMove`). Records fire events per command (prediction `Pmove` call `0x4476A3`). Drops native view kick and scales gun kick (`0x457D2E`). Strips the offset from the wire (`CL_WritePacket`). Applies `svc_recoil` corrections. Runs the listen-server host's gun kick (`0x4A9CB2`). `cl_recoilStatus` prints the mode and correction counters. |
+| `CoD4x_Server/src/sv_recoil.c` | Server glue. Contract and admission. Folds into `lastUsercmd` in `SV_ClientThink`. Handles shots from `G_PlayerEvent` (one retargeted call in `_g_active_mp.asm`), including the gun-kick scale. `svc_recoil` before `svc_EOF`. |
 
-`src/recoil/model.h` is the canonical engine-free C core and contract decoder.
-`model.h` is also the single source for every limit and model ID: `tools/sync-recoil.py`
-generates the Python tooling's `recoil_constants.py` from it, and synchronizes the tracked
-server core, shared C/Python validation corpus and the mod-owned Python validator mirrored
-into release tooling. Run `--check`
-when testing/building a matched set, or select repos with `--server`, `--mod`, `--release`.
-Set `RECOIL_SERVER_SOURCE` in CMake to enable the `recoil_sync` CTest. Do not edit mirrors.
-The normal client build includes `cl_recoil.c` and its hook; the server makefile discovers
-`sv_recoil.c` through its existing source wildcard. No player-state layout change is needed.
+The headers are engine-free and mirrored byte for byte to the server: run
+`python tools/sync-recoil.py`, or `--check` in CI (CTest `recoil_sync` with `RECOIL_SERVER_SOURCE`).
+The script also generates the Python tooling's `recoil_constants.py`.
 
-## Server/client agreement
+## Adding a model
 
-The server publishes one protected `sv_recoilContract` systeminfo value, containing
-both model and all profile values. A client's local configuration is not an input.
-The client reads it from the gamestate, validates the complete value and disconnects
-itself if it cannot apply the model.
+1. Write `src/recoil/models/<name>.h`:
+   - **A parameter table** `recoil_param_t <name>_params[] = {{"name", min, max}, ...}`. The wire decoder,
+     and the generated Python validator, enforce those bounds.
+   - **Optional hooks.** Each runs only for weapons with a profile entry; the others stay native.
+     - `validate(param)`: rules that span several parameters.
+     - `shot(sim, param, shot, result)`: adjust the native result for one shot. It may scale, replace or
+       add to `result->view` (the speeds the shot sets) and `result->gun_scale`, and keep private state
+       in `sim->model`.
+     - `step(sim, param, step)`: replace one 5 ms recovery slice (the default is `Recoil_NativeStep`).
+2. Give it the next permanent ID in `model.h` and a registry line
+   `{ID, "name", <name>_params, count, validate, shot, step}`.
+3. Add its mod profile `recoil/model_<id>.profile` (`1:<id>:weapon,p1,...,pN/...`) and catalog entry. If the
+   model has a `validate` rule, mirror it in the mod's `tools/recoil_contract.py` `CROSS_FIELD_RULES`.
+4. Add tests to `tests/test_recoil.c`, run `tools/sync-recoil.py`, and build both engines.
 
-ROM/userinfo `cl_recoilProtocol` identifies the contract reader; `cl_recoilModels` is
-the bitmask of models the client applies (3 with the hook installed, otherwise 1).
-Protocol support alone is insufficient. When a non-native model is active the server
-checks these capabilities on connect, world entry and userinfo changes. The client
-cannot enter the world before it has the gamestate, which carries the contract, and the
-contract is locked for the server process, so no separate acknowledgement is needed.
-Native servers permit legacy clients without those fields. Without a contract (any other server) the client keeps native
-recoil, except as a listen-server host: the stock listen server publishes nothing, so the host reads
-`recoil_model` and `recoil/model_<id>.profile` itself, once per game, like a dedicated server does.
-Model-1 admission on a dedicated CoD4x server has not been exercised in a multiplayer session.
+The engine glue does not change. Everything a model reads is in `recoil_shot_t` and `recoil_step_t`:
+- the raw usercmd time;
+- the shooter;
+- the shot's index within the command;
+- the weapon and its fixed-point WeaponDef kick data;
+- full and half ADS;
+- the native reduced-kick window;
+- whether the player is alive.
 
-## Profiles and continuous model
+Any arithmetic must be integer, so both builds agree. The tests assert golden values under both compiler
+settings.
 
-Mod source owns `recoil/models.json` and `recoil/model_<id>.profile` for non-native models. These are **server-only loose files**
-at `mods/pmflex/recoil/`; client IWDs do not contain tuning data. Server-only
-`recoil-native.cfg` and `recoil-continuous.cfg` ship beside the IWD. Native has no profile file. The server reads the selected profile;
-the client consumes the published payload, never its own profile copy. Keep authoring
-files and runtime support separate: packaging a profile does not enable its model.
+## Contract
 
-The v1 payload `1:0` is the permanent native contract, including on newer engines.
-A newer reader retains v1 support; capability checks compare its supported version
-to the contract version, rather than requiring equal version ceilings. Model 1 uses
-`1:1:ak74u,2500,3,7500[/weapon,opening,full_shot,recovery]`. Multipliers use basis
-points (10000 = full strength), and recovery is basis points per second. Reject
-unknown model/version, duplicate weapons, noncanonical/overflowing numbers and invalid
-bounds. Maximum payload is 767 bytes, with at most 16 weapon entries.
+The server's `recoil_model` (default 0) is locked at the first map; `recoil_status` lists the models.
+It publishes one ROM systeminfo value, `sv_recoilContract`: `1:0`, or `1:1:ak47,3500,4,7500/...`.
 
-The PromodFlex profile (`opening 2500, full_shot 4`) generates 2500, 5000, 7500, 10000 at the
-AK74u cadence; the original fixture (`full_shot 3`) generates 2500, 6250, 10000. Each shot adds buildup; elapsed simulation time continuously removes it.
-Internal heat has 1/1000-basis-point precision and one cadence interval of reserve,
-so frame splitting loses no fractional recovery and full-speed firing reaches the
-authored endpoint. Only the output multiplier is capped at 10000. These are calculated
-impulse multipliers, not guaranteed bullet positions or played balance results.
+The wire grammar (version 1) is permanent. Each model's parameter count and bounds come from the
+registry. At most 16 weapons and 767 bytes. A weapon entry matches its family (`ak74u` covers
+`ak74u_mp` and `ak74u_reflex_mp`).
 
-The client calls `Recoil_Fire` once per fired shot with the predicted `commandTime` and a shot
-sequence; duplicate IDs return the prior scale and stale time is rejected (the client then starts a
-new burst). Runtime check 2026-11-07 (listen server, mp_crash, AK74u, about 91 fps): the hook ran
-once per shot at 78-88 ms intervals; replaying those times gives 25, 49, 73, 98, 99... percent, and
-a burst after a 2.5 s pause opens at 25% again. Frame quantization (88 ms between shots against a
-78 ms cadence) costs 1-2% at full strength. Feel in a match has not been evaluated.
+Clients advertise ROM userinfo values:
+- `cl_recoilProtocol`: 2 means it applies the server-authoritative simulation;
+- `cl_recoilModels`: a bitmask, non-native only while the hooks are installed.
 
-## Adding another model
+A server with a non-native model admits only clients with protocol 2 and the model bit. It checks on
+connect, on world entry and on every userinfo change. Native servers admit everyone.
 
-1. Add its permanent descriptor and model-specific validation/dispatch in the shared
-   core. Extend/version the payload if its parameter shape differs; retain old decoders.
-2. Add its mod profile and catalog entry; check them with `tools/check-recoil-catalog.py`
-   in the mod repository.
-3. Apply it in `CL_Recoil_FireRecoil` (one call per fired shot). Keep weapon switching,
-   respawn and time-wrap rules explicit.
-4. Run the core/policy tests and an in-game check, then set its registry `integrated` flag,
-   synchronize the mirrors and build matching engines.
+**Listen servers** publish nothing (stock server code). The host reads `recoil_model` and its profile
+itself and folds the kick into the wire ("local mode"). Other players on a listen server stay native.
 
-Tests: configure `RECOIL_TESTS=ON`, build `test_recoil`, run CTest `recoil_core`.
-The server's `make test-recoil` exercises actual policy glue with mock host services
-and the real engine info-string helpers, including multi-weapon transport. C and Python
-validators run against the same fixture corpus. The release repository's `scripts/test-recoil-package.py` checks
-synthetic archives; those fixtures are not runnable game binaries or a public release.
+## Verification (2026-11-07)
+
+- **Tests:** client CTest `recoil_core` and the server's `make test-recoil`. They also pass built with
+  the server's flags (SSE, -O2, LTO) and with x87.
+- **In game, listen server:** mp_crash, AK-74u. One record per shot, about 88 ms apart; the fold climbs
+  during a spray, and a second burst opens at 35% again.
+- **In game, dedicated server:** a local `cod4x18_dedrun.exe` with model 1 and a test client. About 31
+  server-simulated shots. The client received 125 corrections, compared 124 with its own prediction,
+  and all matched exactly (`cl_recoilStatus`).
+- **Not verified:** feel in a match, multiple players, packet loss.

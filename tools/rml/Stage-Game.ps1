@@ -24,6 +24,9 @@ foreach ($part in @($runtime, (Split-Path -Parent $runtime))) {
     }
 }
 $game = Join-Path $runtime 'game'
+if (Get-Process iw3mp -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq (Join-Path $game 'iw3mp.exe') }) {
+    throw 'Close this private test runtime before staging game binaries. Source edits need no staging.'
+}
 $appdata = Join-Path $runtime 'appdata'
 $mod = Join-Path $game 'mods\rmllab'
 New-Item -ItemType Directory -Force -Path $game, $mod, "$appdata\main", "$appdata\zone", "$appdata\players\profiles\RmlLab" | Out-Null
@@ -51,12 +54,11 @@ if (!(Test-Path -LiteralPath "$appdata\players\profiles\active.txt")) {
     '' | Set-Content -LiteralPath "$appdata\players\profiles\RmlLab\config_mp.cfg" -Encoding ASCII
 }
 @'
-bind F8 "rml_show"
+bind F8 "rml_palette"
+bind F7 "rml_economy_preview"
 bind F9 "rml_reload"
 set r_fullscreen 0
-set r_mode -1
-set r_customwidth 1280
-set r_customheight 800
+set r_mode "1280x800"
 set com_maxfps 60
 '@ | Set-Content -LiteralPath (Join-Path $mod 'rml-lab.cfg') -Encoding ASCII
 & (Join-Path $PSScriptRoot 'Stage-Assets.ps1') -ModPath $mod

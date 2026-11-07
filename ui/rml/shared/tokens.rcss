@@ -32,3 +32,11 @@ input.control:disabled { color: #68736a; background-color: #18201b; border-color
 .eyebrow { font-size: 13dp; letter-spacing: 3dp; color: var(--muted); }
 .accent { color: var(--accent); }
 .muted { color: var(--muted); }
+scrollbarvertical { width: 8dp; background-color: #111a15; }
+scrollbarhorizontal { height: 8dp; background-color: #111a15; }
+scrollbarvertical sliderbar, scrollbarhorizontal sliderbar { background-color: #56614d; min-height: 24dp; min-width: 8dp; }
+scrollbarvertical sliderbar:hover, scrollbarhorizontal sliderbar:hover { background-color: #a18d5c; }
+scrollbarvertical slidertrack { width: 8dp; }
+scrollbarhorizontal slidertrack { height: 8dp; }
+scrollbarvertical sliderarrowdec, scrollbarvertical sliderarrowinc { height: 0; }
+scrollbarhorizontal sliderarrowdec, scrollbarhorizontal sliderarrowinc { width: 0; }

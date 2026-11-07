@@ -10,4 +10,7 @@ int CL_Rml_KeyEvent(int key, int down);
 int CL_Rml_CharEvent(unsigned int value);
 int CL_Rml_MouseEvent(int x, int y);
 int R_QueueRmlFrame(uint32_t ticket);
+struct menuDef_t;
+void CL_Rml_MenuOpened(struct menuDef_t *menu);
+void CL_Rml_MenuClosing(struct menuDef_t *menu);
 #endif

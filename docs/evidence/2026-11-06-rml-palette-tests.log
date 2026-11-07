@@ -1,0 +1,184 @@
+Start testing: Nov 06 16:58 Pacific Standard Time
+----------------------------------------------------------
+1/4 Testing: rml_native
+1/4 Test: rml_native
+Command: "C:/development/CoD4x_Client_pub/build-rml/bin/test_rml.exe" "C:/development/CoD4x_Client_pub/build-rml/rml-diagnostic.png"
+Directory: C:/development/CoD4x_Client_pub/build-rml/src/rml
+"rml_native" start time: Nov 06 16:58 Pacific Standard Time
+Output:
+----------------------------------------------------------
+PASS: initialize actual core and FreeType
+PASS: load pixel fixture through packaged filesystem interface
+PASS: hidden native test window
+PASS: Direct3D9 available
+D3D9 adapters: 1
+Adapter 0: NVIDIA GeForce RTX 3050 caps=0x00000000
+PASS: record immutable frame
+Clip pixels: inside=ffff0000 outside=ff0000ff
+PASS: untextured geometry and RGBA channel order
+PASS: premultiplied transparency over scene color
+PASS: overflow scissor clipping
+PASS: GPU transform and translation convention
+PASS: TGA texture orientation and color channels
+PASS: real FreeType glyph atlas draws text
+PASS: restore native FVF
+PASS: restore native render state
+PASS: restore shade mode
+PASS: restore texture sampler
+PASS: restore viewport
+PASS: restore scissor rectangle
+PASS: a frame ticket is consumed exactly once
+PASS: record immutable frame
+PASS: reuse compiled GPU geometry and glyph textures
+PASS: bounded retention when native queues are discarded
+PASS: record immutable frame
+PASS: recover rendering after reset from retained CPU resources
+PASS: hidden UI records no frames
+PASS: reload actual diagnostic document and styles
+PASS: record immutable frame
+PASS: record immutable frame
+PASS: record immutable frame
+PASS: record immutable frame
+PASS: moving within a control does not repeat hover audio
+PASS: record immutable frame
+PASS: real document input updates binding and local selection cue
+PASS: Escape releases modal visibility
+PASS: reopen diagnostic
+PASS: focus loss hides modal surface
+PASS: reopen before failed reload
+PASS: missing document reload retains working modal surface
+PASS: open native CoD4 palette
+PASS: record immutable frame
+PASS: record immutable frame
+PASS: diagnostic styles produce no unexpected RmlUi warnings
+PASS: runtime can initialize again after shutdown
+RML_NATIVE_CHECKS_PASSED
+RmlUi: Loaded font face 'Source Sans Pro' [regular] from 'ui/rml/fonts/SourceSansPro-Regular.otf'.
+RmlUi: Unable to open file ui/rml/diagnostic.rml.
+RmlUi: Loaded font face 'Source Sans Pro' [regular] from 'ui/rml/fonts/SourceSansPro-Regular.otf'.
+<end of output>
+Test time =   0.92 sec
+----------------------------------------------------------
+Test Passed.
+"rml_native" end time: Nov 06 16:58 Pacific Standard Time
+"rml_native" time elapsed: 00:00:00
+----------------------------------------------------------
+
+2/4 Testing: rml_cpu
+2/4 Test: rml_cpu
+Command: "C:/development/CoD4x_Client_pub/build-rml/bin/test_rml.exe" "--cpu"
+Directory: C:/development/CoD4x_Client_pub/build-rml/src/rml
+"rml_cpu" start time: Nov 06 16:58 Pacific Standard Time
+Output:
+----------------------------------------------------------
+PASS: initialize actual core and FreeType
+PASS: load real diagnostic with packaged styles
+PASS: layout and record real document without a device
+PASS: one hover cue within a control
+PASS: reentering a control plays its next hover cue
+PASS: bound local action and selection cue
+PASS: Enter activates the focused native control
+PASS: literal native CoD4 arrow reaches RmlUi
+PASS: literal native CoD4 Ctrl reaches RmlUi
+PASS: literal native CoD4 Shift reaches RmlUi
+PASS: literal native CoD4 Alt reaches RmlUi
+PASS: literal native CoD4 keypad Page Up reaches RmlUi
+PASS: disabled native control rejects activation
+PASS: hide while pointer is held
+PASS: reopen after capture loss
+PASS: release after focus loss cannot activate a stale control
+PASS: Escape stops recording
+PASS: reopen after Escape
+PASS: bounded discarded-queue ownership
+PASS: device loss invalidates pending frame tickets
+PASS: source reload retains bound model
+PASS: model survives reload
+PASS: failed reload retains working screen
+PASS: load CoD4 palette with shared effects
+PASS: screen selection rejects unknown identifiers
+PASS: no unexpected parse or style diagnostics
+RML_CPU_CHECKS_PASSED
+RmlUi: Loaded font face 'Source Sans Pro' [regular] from 'ui/rml/fonts/SourceSansPro-Regular.otf'.
+RmlUi: Unable to open file ui/rml/diagnostic.rml.
+<end of output>
+Test time =   0.06 sec
+----------------------------------------------------------
+Test Passed.
+"rml_cpu" end time: Nov 06 16:58 Pacific Standard Time
+"rml_cpu" time elapsed: 00:00:00
+----------------------------------------------------------
+
+3/4 Testing: rml_source
+3/4 Test: rml_source
+Command: "C:/development/CoD4x_Client_pub/build-rml/bin/test_rml.exe" "--source"
+Directory: C:/development/CoD4x_Client_pub/build-rml/src/rml
+"rml_source" start time: Nov 06 16:58 Pacific Standard Time
+Output:
+----------------------------------------------------------
+PASS: initialize actual core and FreeType
+PASS: open isolated authoring fixture
+PASS: open isolated authoring fixture
+PASS: select loose authoring source
+PASS: load document directly from authoring source
+PASS: initial source style applied
+PASS: open isolated authoring fixture
+PASS: save waits for quiet interval
+PASS: style save changes live layout without restart
+PASS: open isolated authoring fixture
+PASS: component save changes live layout without restart
+PASS: missing source is reported
+PASS: failed save retains working document
+PASS: open isolated authoring fixture
+PASS: source watching recovers after missing document
+PASS: reload status reports successful and failed saves
+PASS: source reader initialized
+PASS: source namespace rejects traversal
+RML_SOURCE_CHECKS_PASSED
+RmlUi: Loaded font face 'Source Sans Pro' [regular] from 'ui/rml/fonts/SourceSansPro-Regular.otf'.
+RmlUi: source reloaded
+RmlUi: source reloaded
+RmlUi: Unable to open file ui/rml/diagnostic.rml.
+RmlUi: source reload failed; previous document retained
+RmlUi: source reloaded
+<end of output>
+Test time =   1.74 sec
+----------------------------------------------------------
+Test Passed.
+"rml_source" end time: Nov 06 16:58 Pacific Standard Time
+"rml_source" time elapsed: 00:00:01
+----------------------------------------------------------
+
+4/4 Testing: rml_palette
+4/4 Test: rml_palette
+Command: "C:/development/CoD4x_Client_pub/build-rml/bin/test_rml.exe" "--palette"
+Directory: C:/development/CoD4x_Client_pub/build-rml/src/rml
+"rml_palette" start time: Nov 06 16:58 Pacific Standard Time
+Output:
+----------------------------------------------------------
+PASS: initialize actual core and FreeType
+PASS: open palette as the first screen
+PASS: hidden native test window
+PASS: Direct3D9 available
+D3D9 adapters: 1
+Adapter 0: NVIDIA GeForce RTX 3050 caps=0x00000000
+PASS: record immutable frame
+PASS: record immutable frame
+PASS: complete control text on first open, before any reload
+PASS: reload palette without losing its screen selection
+PASS: record immutable frame
+PASS: record immutable frame
+PASS: text is identical before and after reload
+PASS: record immutable frame
+PASS: record immutable frame
+PASS: switch back to diagnostic through typed screen API
+PASS: palette loads without warnings
+RmlUi: Loaded font face 'Source Sans Pro' [regular] from 'ui/rml/fonts/SourceSansPro-Regular.otf'.
+<end of output>
+Test time =   1.02 sec
+----------------------------------------------------------
+Test Passed.
+"rml_palette" end time: Nov 06 16:58 Pacific Standard Time
+"rml_palette" time elapsed: 00:00:01
+----------------------------------------------------------
+
+End testing: Nov 06 16:58 Pacific Standard Time

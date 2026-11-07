@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([Parameter(Mandatory)][string]$ModPath)
+param([Parameter(Mandatory)][string]$ModPath, [string]$ModSourcePath = '')
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $source = Join-Path $repo 'ui\rml'
@@ -18,6 +18,8 @@ while ($ancestor) {
 }
 New-Item -ItemType Directory -Path $destination -Force | Out-Null
 Copy-Item -Path (Join-Path $source '*') -Destination $destination -Recurse -Force
+if (!$ModSourcePath) { $ModSourcePath = Join-Path $repo '..\promod-econ-na\ui\rml' }
+if (Test-Path -LiteralPath $ModSourcePath) { Copy-Item -Path (Join-Path $ModSourcePath '*') -Destination $destination -Recurse -Force }
 $files = @(Get-ChildItem -LiteralPath $destination -Recurse -File | ForEach-Object {
     [ordered]@{ path = $_.FullName.Substring($destination.Length + 1).Replace('\', '/');
         sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() }

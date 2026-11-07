@@ -10,6 +10,9 @@
 #include <stdbool.h>
 
 #include "ui/ui_menus.h"
+#ifdef COD4X_RMLUI
+#include "cl_rml.h"
+#endif
 
 cvar_t	*ui_debug;
 
@@ -1433,6 +1436,9 @@ void Menus_Open(UiContext_t *dc, menuDef_t *menu)
   {
     IN_MenuResetMouse();
   }
+#ifdef COD4X_RMLUI
+  CL_Rml_MenuOpened(menu);
+#endif
 }
 
 
@@ -1440,6 +1446,9 @@ void Menus_Close(UiContext_t *dc, menuDef_t *menu)
 {
 	int i;
 	itemDef_t itemdef;
+#ifdef COD4X_RMLUI
+    CL_Rml_MenuClosing(menu);
+#endif
 
 	if(ui_debug->boolean)
 	{

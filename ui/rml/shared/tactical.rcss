@@ -1,0 +1,18 @@
+/* CoD4 vocabulary adapted from Proline's palette: a11, b1, e5, g3 and g14. */
+.bracket { position: absolute; width: 12dp; height: 12dp; border-color: var(--accent); }
+.tl { left: 9dp; top: 9dp; border-left: 1dp; border-top: 1dp; }
+.tr { right: 9dp; top: 9dp; border-right: 1dp; border-top: 1dp; }
+.bl { left: 9dp; bottom: 9dp; border-left: 1dp; border-bottom: 1dp; }
+.br { right: 9dp; bottom: 9dp; border-right: 1dp; border-bottom: 1dp; }
+.accepted { color: var(--cash); }
+.denied { color: #d38773; }
+.muted { color: var(--muted); }
+.scanlines { position: absolute; left: 0; top: 0; right: 0; bottom: 0; decorator: image(../images/scanlines.tga repeat); pointer-events: none; }
+.playing .panel-arrival { animation: 0.18s exponential-out panel-arrival; }
+@keyframes panel-arrival { from { transform: translateY(12dp); opacity: 0; } to { transform: translateY(0dp); opacity: 1; } }
+.playing .accepted { animation: 0.24s exponential-out cash-punch; }
+@keyframes cash-punch { from { transform: scale(1.5); } to { transform: scale(1); } }
+.playing .red { animation: 0.24s linear-in-out break-red; }
+.playing .cyan { animation: 0.24s linear-in-out break-cyan; }
+@keyframes break-red { from { transform: translateX(-5dp); opacity: 0.8; } 25% { transform: translateX(4dp); opacity: 0.7; } 50% { transform: translateX(-2dp); opacity: 0.5; } to { transform: translateX(0dp); opacity: 0; } }
+@keyframes break-cyan { from { transform: translateX(5dp); opacity: 0.8; } 25% { transform: translateX(-3dp); opacity: 0.7; } 50% { transform: translateX(2dp); opacity: 0.5; } to { transform: translateX(0dp); opacity: 0; } }

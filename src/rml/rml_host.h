@@ -12,6 +12,9 @@ typedef struct rml_host_s {
     void (*free_file)(void *data);
     void (*log)(const char *message);
     void (*play_sound)(const char *alias);
+    double (*elapsed_time)(void);
+    const char *(*get_value)(const char *name);
+    int (*menu_response)(const char *response);
 } rml_host_t;
 
 typedef struct rml_stats_s {
@@ -19,14 +22,21 @@ typedef struct rml_stats_s {
     uint32_t geometry_uploads, texture_uploads, pending_frames;
     int32_t last_render_result;
     int visible, activations;
+    uint32_t source_reloads, source_failures;
 } rml_stats_t;
 
 int RmlHost_Init(const rml_host_t *host);
 void RmlHost_Shutdown(void);
 int RmlHost_Show(void);
+typedef enum { RML_SCREEN_DIAGNOSTIC, RML_SCREEN_PALETTE, RML_SCREEN_ECONOMY, RML_SCREEN_ECONOMY_PREVIEW } rml_screen_t;
+int RmlHost_Open(rml_screen_t screen);
 void RmlHost_Hide(void);
 int RmlHost_Visible(void);
 int RmlHost_Reload(void);
+int RmlHost_SetSourceDirectory(const char *directory);
+int RmlHost_SetModSourceDirectory(const char *directory);
+void RmlHost_EconomyDialog(int confirmation);
+int RmlHost_ActionAllowed(const char *response);
 void RmlHost_MouseMove(int x, int y);
 void RmlHost_Key(int key, int down, int modifiers);
 void RmlHost_Text(uint32_t codepoint);

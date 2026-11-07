@@ -1,0 +1,33 @@
+<rml>
+<head>
+    <title>PromodFlex / field interface palette</title>
+    <link type="text/rcss" href="shared/tokens.rcss" />
+    <link type="text/rcss" href="shared/economy-kit.rcss" />
+    <link type="text/rcss" href="shared/tactical.rcss" />
+    <link type="text/rcss" href="palette.rcss" />
+</head>
+<body data-model="diagnostic" class="playing">
+    <div class="palette">
+        <div class="header"><div><div class="eyebrow accent">PROMODFLEX / DESIGN ARMORY</div><h1>FIELD INTERFACE</h1></div><div class="build-tag">RML / D3D9<br /><span class="muted">LIVE AUTHORING</span></div></div>
+        <div class="lead">A restrained vocabulary for loadouts, round transitions and tactical feedback.</div>
+        <div class="samples">
+            <div class="sample"><div class="label">01 / SURFACE</div><div class="preview faded"><div class="eyebrow">FIELD EQUIPMENT</div><div class="large">ASSAULT</div><div class="muted">Issued. Ready for deployment.</div></div><div class="recipe">soft-fade(#172019ee .08 .04 .08 .04)</div><div class="note">Proline port / cached geometry / no effect target</div></div>
+            <div class="sample"><div class="label">02 / FRAME &amp; FOCUS</div><div class="preview tactical-frame"><div class="bracket tl" /><div class="bracket tr" /><div class="bracket bl" /><div class="bracket br" /><input id="palette-select" class="control" type="button" value="SELECT LOADOUT" data-action="select" /></div><div class="recipe">.tactical-frame + .control</div><div class="note">Amber focus / mouse, Tab and Enter / local audio</div></div>
+            <div class="sample"><div class="label">03 / SIGNAL SWEEP</div><div class="preview signal-screen"><div class="scanlines" /><div class="eyebrow">UPLINK / SECURE</div><div class="large">ACQUIRED</div><div class="sweep-track"><div class="sweep" /></div></div><div class="recipe">.signal-screen / 1200ms sweep</div><div class="note">Cached strip texture / clipped motion / no filter pass</div></div>
+            <div class="sample"><div class="label">04 / SIGNAL BREAK</div><div class="preview signal-break"><div class="glitch-copy red">TRANSMITTING</div><div class="glitch-copy cyan">TRANSMITTING</div><div class="glitch-copy foreground">TRANSMITTING</div><div class="signal-caption">BRIEF INTERFERENCE / STABLE HIT BOX</div></div><div class="recipe">.signal-break / 240ms RGB displacement</div><div class="note">Geometry variant / layered type / replay to preview</div></div>
+            <div class="sample"><div class="label">05 / ARRIVAL</div><div class="preview"><div class="panel-arrival"><div class="eyebrow accent">LOADOUT UPDATED</div><div class="large">READY TO DEPLOY</div><div class="muted">180ms settle / 12dp travel</div></div></div><div class="recipe">.panel-arrival / exponential-out</div><div class="note">Transform + opacity / fixed outer control layout</div></div>
+            <div class="sample"><div class="label">06 / RESPONSE STATES</div><div class="preview states"><span class="accepted">+ $50</span><span class="denied">BUY CLOSED</span><input id="palette-disabled" type="button" class="control" disabled="disabled" value="UNAVAILABLE" /></div><div class="recipe">.accepted / .denied / :disabled</div><div class="note">Illustrative states / no server transactions</div></div>
+        </div>
+        <div class="toolbar"><input id="replay" class="control" type="button" data-action="replay" value="REPLAY MOTION" /><div class="feedback">{{status}}</div><input id="close" class="control" type="button" data-action="close" value="CLOSE" /></div>
+        <div class="kit-section"><div class="eyebrow accent">ECONOMY / SHARED COMPONENTS</div><div class="lead">One visual language. Every state has a word as well as a color.</div><div class="samples">
+            <div class="kit-specimen"><div class="kit-label">07 / STATE BADGES</div><div class="kit-title">READ IT AT A GLANCE</div><span class="kit-badge selected">SELECTED</span><span class="kit-badge owned">OWNED</span><span class="kit-badge included">INCLUDED</span><span class="kit-badge blocked">BUY CLOSED</span><div class="note">Amber / selection. Green / ownership. Blue / included.</div></div>
+            <div class="kit-specimen"><div class="kit-label">08 / WALLET &amp; FLOW</div><div class="kit-money">$250</div><div class="kit-money-change">+ $50 / ROUND INCOME</div><div class="kit-money-change debit">- $100 / EQUIPMENT</div><div class="note">Green credits; amber spending. Red is reserved for blocked actions.</div></div>
+            <div class="kit-specimen"><div class="kit-label">09 / ARMOR CAPACITY</div><div class="kit-title">BODY ARMOR</div><span class="kit-segment full" /><span class="kit-segment" /><span class="kit-badge owned">1 / 2 CHARGES</span><div class="note">One half-price refill. Carried ownership remains distinct from refundable purchases.</div></div>
+            <div class="kit-specimen"><div class="kit-label">10 / ACTION HIERARCHY</div><input type="button" class="control kit-primary" value="DEPLOY" data-action="select" /><input type="button" class="control kit-secondary" value="CHANGE WEAPON" data-action="select" /><input type="button" class="control kit-refund" value="REFUND PURCHASE" data-action="select" /><div class="note">Commit, navigate, reverse. Consistent shapes and emphasis.</div></div>
+            <div class="kit-specimen"><div class="kit-label">11 / FEEDBACK</div><div class="kit-notice owned">OWNED / READY FOR THIS ROUND</div><div class="kit-notice blocked">WAIT FOR SPAWN / PURCHASE LOCKED</div><div class="kit-badge pending"><span class="kit-pending-dot">●</span> AWAITING SERVER</div><div class="note">A click is a request. Confirmation follows authoritative state.</div></div>
+            <div class="kit-specimen"><div class="kit-label">12 / TEAM SUPPORT</div><div class="kit-title">MAVERICK <span class="accepted">$50</span></div><div class="kit-label">SPEC OPS / FRAG OWNED</div><input type="button" class="control kit-choice" value="GIVE $50 →" data-action="select" /><div class="note">An explicit action for a player session. No accidental whole-card transfers.</div></div>
+        </div></div>
+        <div class="footer eyebrow">F7 ECONOMY PREVIEW / SAVE RML &amp; RCSS TO UPDATE / F9 MANUAL RELOAD / ESC CLOSE</div>
+    </div>
+</body>
+</rml>

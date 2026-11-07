@@ -1,0 +1,106 @@
+﻿{
+    "clientBase":  "1c0c6a61bdbea0e43fd4578033462b287ea0f6e6",
+    "binarySha256":  "3ffa1f70add4bff2ca27854c4101d7bfae8b9cefc0c684d9e2a6fe2197752719",
+    "files":  [
+                  {
+                      "path":  "src/rml/CMakeLists.txt",
+                      "sha256":  "bdf42ebbc83c7f5f9c5fb4727e868c1734e93c00a5fcd4ce6e14de14ecf3cba9"
+                  },
+                  {
+                      "path":  "src/rml/d3d9_renderer.cpp",
+                      "sha256":  "cf3f049985a097992886711ed96180a905acb4e10d4dc8d44b1f8745aa17274e"
+                  },
+                  {
+                      "path":  "src/rml/d3d9_renderer.hpp",
+                      "sha256":  "4b437cce1f2a7f2fedc6c3e921d52e6ae271e762d54456ef7f2cd7de104d0eea"
+                  },
+                  {
+                      "path":  "src/rml/effects.cpp",
+                      "sha256":  "a5261ac8481bb72af550cd8bbca76cb5572b9001b24f6f20fb337a035ae6864a"
+                  },
+                  {
+                      "path":  "src/rml/effects.hpp",
+                      "sha256":  "a31b4536dc52b16fd0e1e179a3022c8ecab94c97e3cc1e29cb0efedec62634fa"
+                  },
+                  {
+                      "path":  "src/rml/frame.cpp",
+                      "sha256":  "228a040261fe5ad00cf3e1c994304eedc238526ff0adf722e983fbd996896463"
+                  },
+                  {
+                      "path":  "src/rml/frame.hpp",
+                      "sha256":  "73fa6c32883ae886c09f8f288efb839278d4b520115cdc89ea90938c139827e3"
+                  },
+                  {
+                      "path":  "src/rml/native_keys.h",
+                      "sha256":  "eee00d4b7041030bdd97f9bc4122bdecb6ca8a38046acd694c51d240f8a1cbc7"
+                  },
+                  {
+                      "path":  "src/rml/rml_host.h",
+                      "sha256":  "b03d0634700ad6b4cdec72506cf5b7ebba8eb0f0ba931a582f88068e59ee4400"
+                  },
+                  {
+                      "path":  "src/rml/runtime.cpp",
+                      "sha256":  "bbbd463ab842938a14aa4edaccbe8c6e2c62a62540a0f972f510c9bdcb60899b"
+                  },
+                  {
+                      "path":  "src/rml/source.cpp",
+                      "sha256":  "4e500308ecc0cb7c79fda45b2bd711112774b2cb2617c8b45011b688be6441f0"
+                  },
+                  {
+                      "path":  "src/rml/source.hpp",
+                      "sha256":  "2b97ce1a6caa56ac5db1bac9bda000370c89505257680d906981c441fbd756ce"
+                  },
+                  {
+                      "path":  "src/cl_rml.c",
+                      "sha256":  "6ccdc279c38e4b2bda33ba6cc943b19a2eee2ef4792641b97b6180253e690b5b"
+                  },
+                  {
+                      "path":  "tests/test_rml.cpp",
+                      "sha256":  "2e5e0093a515f03e7b6221001812a9e1682b3972151994f9cab8c9963ed40a7d"
+                  },
+                  {
+                      "path":  "tools/rml/Run-Game.ps1",
+                      "sha256":  "fceee7d63d7534199ad7202fb65c61448e5a8601995e81718246888930c6777e"
+                  },
+                  {
+                      "path":  "tools/rml/Stage-Game.ps1",
+                      "sha256":  "058a5d0095f66f4d2c776d359edee911d121ff4d435b107e52635b3638dde705"
+                  },
+                  {
+                      "path":  "ui/rml/diagnostic.rcss",
+                      "sha256":  "a141e8ad159fe1389553a88e0e0b9c37405da37ce336e64aa23e3b47def725a3"
+                  },
+                  {
+                      "path":  "ui/rml/diagnostic.rml",
+                      "sha256":  "dba66ee3b81dc3311398668e7a9d3e966bd97f95eef831a5e44845ce6976176b"
+                  },
+                  {
+                      "path":  "ui/rml/palette.rcss",
+                      "sha256":  "426c000a035dafc9fa496a6cc6a0c326eddba87a53ea929b202bb741e824324b"
+                  },
+                  {
+                      "path":  "ui/rml/palette.rml",
+                      "sha256":  "24cf93a5f880c0dc685b63ddaa399084f683be5cbb2c0018b7dd30db7ce98cf1"
+                  },
+                  {
+                      "path":  "ui/rml/fonts/OFL.txt",
+                      "sha256":  "fdc1ca664814ba067c160bcce86e72ae303c7809314b7453a20ab8ab279940b9"
+                  },
+                  {
+                      "path":  "ui/rml/fonts/SourceSansPro-Regular.otf",
+                      "sha256":  "2b92de018f47ad48c371f8ae1a5ace7c3031836c9b0144f34b81be9332cb5e5c"
+                  },
+                  {
+                      "path":  "ui/rml/images/scanlines.tga",
+                      "sha256":  "aeb91a105cf173e8e3ba73ea6ad647ff05df223b4a78c25b0460fc27631e8ed9"
+                  },
+                  {
+                      "path":  "ui/rml/shared/tactical.rcss",
+                      "sha256":  "c5de173b930e8209df377b4cc07f8617b3ec48ef08a8a4ca8d9996667c835193"
+                  },
+                  {
+                      "path":  "ui/rml/shared/tokens.rcss",
+                      "sha256":  "2dea61cad69899614b455333ba20b15e1cef9bb86f2c707b7dbfefce0423795c"
+                  }
+              ]
+}

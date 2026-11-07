@@ -7,7 +7,7 @@ A [CoD4x Server](https://github.com/callofduty4x/CoD4x_Server)-compatible client
 
 Custom 100 Hz and volumetric smoke feature context: [maintainer handoff](smoke/HANDOFF.md).
 
-Optional RmlUi UI foundation, diagnostic, build and private runtime workflow: [RmlUi host](docs/rmlui.md).
+Optional RmlUi host, CoD4 palette, live RML/RCSS editing and private runtime workflow: [RmlUi host](docs/rmlui.md).
 
 This client version isn't compatible with CoD4x servers that require client authentication, however, it is compatible with servers that have client authentication disabled (`sv_noauth 1`).
 

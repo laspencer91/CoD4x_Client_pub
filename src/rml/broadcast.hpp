@@ -23,11 +23,11 @@ private:
     // Card heights in dp, measured from the stylesheet on each document load.
     float expanded_height=66, condensed_height=34;
     void MeasureCards();
-    Rml::String team_style, team_factions, left_score, right_score, clock, round, left_alive, right_alive, phase, name_color8, name_color9, left_header_bottom, right_header_bottom;
+    Rml::String team_style, team_factions, left_score, right_score, clock, round, left_alive, right_alive, name_color8, name_color9, left_header_bottom, right_header_bottom;
     enum class CardMode { Expanded, Compact, Hidden };
     CardMode last_visible_mode=CardMode::Expanded;
     bool observer=false, relative=false, compact=false, hidden=false, planted=false, armor_visible=false;
-    int armor_charges=0, target=0, rounds=0;
+    int armor_charges=0;
     double retry_at=0;
 };
 }

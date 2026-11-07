@@ -26,6 +26,7 @@ static int rml_retry_at;
  * menu then adopts the open screen. Times are Sys_Milliseconds; zero means none pending. */
 static qboolean rml_open_pending, rml_first_frame_pending;
 static int rml_buy_key_at, rml_local_open_at;
+static int rml_scores_server_id = -1; /* map load (cl.serverId) whose team scores were last requested */
 static Material *rml_cursor;
 static int rml_cursor_x, rml_cursor_y;
 #ifdef COD4X_TEST_ISOLATION
@@ -91,6 +92,14 @@ static const char* CL_Rml_Value(const char* name)
         Com_sprintf(color,sizeof(color),"#%02x%02x%02x%02x",rgba[0],rgba[1],rgba[2],rgba[3]);
         return color;
     }
+    /* Engine state the HUD reads directly: team scores (setTeamScore and the score reply) and the round or bomb
+     * clock (setGameEndTime). No end time means no clock. */
+    if (!strcmp(name,"rml_score_allies")) { Com_sprintf(color,sizeof(color),"%d",cg.teamScores[2]); return color; }
+    if (!strcmp(name,"rml_score_axis")) { Com_sprintf(color,sizeof(color),"%d",cg.teamScores[1]); return color; }
+    if (!strcmp(name,"rml_seconds_left")) {
+        if (cgs.gameEndTime <= 0) return "";
+        Com_sprintf(color,sizeof(color),"%d",cgs.gameEndTime > cg.time ? (cgs.gameEndTime - cg.time + 999) / 1000 : 0); return color;
+    }
     if (!strcmp(name,"rml_local_team")) {
         static const char *teams[] = {"", "axis", "allies", "spectator"};
         const int team = cg.bgs.clientinfo[cg.clientNum].team;
@@ -118,7 +127,8 @@ static void CL_Rml_Cards_f(void) { Cvar_SetInt(rml_cards,(rml_cards->integer+1)%
 void CL_Rml_Disconnect(void)
 {
     CL_Rml_Hide(); RmlHost_EnableBroadcast(0);
-    Cvar_SetStringByName("broadcast_active","0"); Cvar_SetStringByName("ui_rml_broadcast_drawn","0");
+    Cvar_SetStringByName("ui_rml_hud","0"); Cvar_SetStringByName("ui_rml_broadcast_drawn","0");
+    rml_scores_server_id = -1;
     /* Server-published state that gates the local open and the HUD must not carry over to the next server. */
     Cvar_SetStringByName("flat_economy_live","0"); Cvar_SetStringByName("flat_loadout_ready","0");
     Cvar_SetStringByName("economy_armor_charges","0");
@@ -268,8 +278,9 @@ static void CL_Rml_Status_f(void)
         stats.visible, stats.recorded_frames, stats.rendered_frames, stats.draw_calls,
         stats.geometry_uploads, stats.texture_uploads, stats.pending_frames, (unsigned)stats.last_render_result,
         stats.source_reloads, stats.source_failures, stats.activations);
-    Com_Printf(CON_CHANNEL_UI,"RmlUi broadcast: ready=%d drawn=%d captured=%d mode=%s cards=%d\n",
-        RmlHost_BroadcastReady(),Cvar_GetInt("ui_rml_broadcast_drawn"),rml_captured,Cvar_GetString("broadcast_mode"),rml_cards->integer);
+    Com_Printf(CON_CHANNEL_UI,"RmlUi broadcast: ready=%d drawn=%d captured=%d hud=%d team=%s allies=%d axis=%d end=%d time=%d cards=%d\n",
+        RmlHost_BroadcastReady(),Cvar_GetInt("ui_rml_broadcast_drawn"),rml_captured,Cvar_GetInt("ui_rml_hud"),CL_Rml_Value("rml_local_team"),
+        cg.teamScores[2],cg.teamScores[1],cgs.gameEndTime,cg.time,rml_cards->integer);
     Com_Printf(CON_CHANNEL_UI,"RmlUi economy: cash=%s frag=%s armor=%s buy=%d allowed=%d adopted=%d\n",
         Cvar_GetString("economy_cash"),Cvar_GetString("economy_frag_owned"),Cvar_GetString("economy_armor_charges"),
         Cvar_GetInt("economy_buy_open"),Cvar_GetInt("economy_purchase_allowed"),rml_menus[0].menu!=NULL);
@@ -352,11 +363,13 @@ void CL_Rml_Frame(void)
     if (rml_menus[0].menu && !rml_economy->boolean) CL_Rml_Hide();
     {
         const int draw_hud=clientUIActives.state == CA_ACTIVE && rml_enabled && rml_enabled->boolean && rml_broadcast->boolean &&
-            Cvar_GetInt("broadcast_active") && Cvar_GetInt("cg_draw2D") && !cg.inKillCam && !uiMem.uiInfo.uiDC.openMenuCount && !(clientUIActives.keyCatchers & KEYCATCH_CONSOLE);
+            Cvar_GetInt("ui_rml_hud") && Cvar_GetInt("cg_draw2D") && !cg.inKillCam && !uiMem.uiInfo.uiDC.openMenuCount && !(clientUIActives.keyCatchers & KEYCATCH_CONSOLE);
         if (draw_hud) CL_Rml_EnsureHost();
+        /* Team scores arrive when they change; after joining or a map load, ask once for the current ones. */
+        if (draw_hud && cl.serverId != rml_scores_server_id) { rml_scores_server_id = cl.serverId; CL_AddReliableCommand("score"); }
         RmlHost_EnableBroadcast(draw_hud);
     }
-    if (!rml_enabled || !rml_enabled->boolean || (!RmlHost_Visible() && !Cvar_GetInt("broadcast_active"))) {
+    if (!rml_enabled || !rml_enabled->boolean || (!RmlHost_Visible() && !Cvar_GetInt("ui_rml_hud"))) {
         Cvar_SetStringByName("ui_rml_broadcast_drawn","0");
         if (rml_captured) CL_Rml_Hide();
         return;

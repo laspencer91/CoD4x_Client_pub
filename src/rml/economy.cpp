@@ -129,8 +129,7 @@ void EconomyView::Update(const rml_host_t& host, bool use_fixture, double /*seco
         roles.push_back(std::move(row));
     }
     primary = WeaponName(value("loadout_primary")); secondary = WeaponName(value("loadout_secondary"));
-    auto icon = [](const Rml::String& key) { return key.empty() ? Rml::String() : "images/" + key + ".tga"; };
-    primary_icon = icon(value("loadout_primary")); secondary_icon = icon(value("loadout_secondary"));
+    primary_icon = ImagePath(value("loadout_primary")); secondary_icon = ImagePath(value("loadout_secondary"));
     const auto attachment = value("loadout_primary_attachment"), pistol_attachment = value("loadout_secondary_attachment");
     primary_none = attachment == "none"; primary_silencer = attachment == "silencer"; primary_reflex = attachment == "reflex";
     secondary_silencer = pistol_attachment == "silencer";
@@ -151,22 +150,22 @@ void EconomyView::Update(const rml_host_t& host, bool use_fixture, double /*seco
         number("economy_suppressor_secondary_owned") ? "OWNED" : money("economy_suppressor_price");
     weapons.clear(); const int count = std::max(0, std::min(number("flat_primary_rows"), 7));
     for (int i=0; i<count; ++i) { EconomyOption row; const auto ref = value("flat_primary_" + std::to_string(i) + "_ref");
-        row.key = std::to_string(i); row.detail = std::to_string(i + 1); row.name = WeaponName(ref); row.icon = icon(ref); row.enabled = has_class && !ref.empty(); row.selected = ref == value("loadout_primary");
+        row.key = std::to_string(i); row.detail = std::to_string(i + 1); row.name = WeaponName(ref); row.icon = ImagePath(ref); row.enabled = has_class && !ref.empty(); row.selected = ref == value("loadout_primary");
         row.state = row.selected ? "EQUIPPED" : economy_mode ? "FREE" : "";
         weapons.push_back(row); }
     pistols.clear();
-    for (const char* ref : pistol_keys) { EconomyOption row; row.key=ref; row.detail=std::to_string(pistols.size()+1); row.name=WeaponName(ref); row.icon=icon(ref); row.enabled=has_class && number("weap_allow_"+row.key); row.selected=row.key==value("loadout_secondary"); row.state=row.selected ? "EQUIPPED" : economy_mode ? "FREE" : ""; pistols.push_back(row); }
+    for (const char* ref : pistol_keys) { EconomyOption row; row.key=ref; row.detail=std::to_string(pistols.size()+1); row.name=WeaponName(ref); row.icon=ImagePath(ref); row.enabled=has_class && number("weap_allow_"+row.key); row.selected=row.key==value("loadout_secondary"); row.state=row.selected ? "EQUIPPED" : economy_mode ? "FREE" : ""; pistols.push_back(row); }
     const int charges = number("economy_armor_charges"); armor_one = charges >= 1; armor_two = charges >= 2;
     armor_price = money("economy_armor_price"); armor_buy = has_class && number("economy_can_buy_armor");
     armor_refund = buy_open && purchase_allowed && number("economy_armor_refundable");
     frag_owned = number(economy_mode ? "economy_frag_owned" : "weap_allow_frag_grenade");
     frag_price = money("economy_frag_price"); frag_buy = has_class && number("economy_can_buy_frag"); frag_refund = number("economy_frag_refundable");
     tactical = value("flat_utility_name"); camo = value("flat_camo_label"); repeat = number("economy_repeat_enabled");
-    tactical_icon = icon(tactical == "SMOKE" ? "eq-smoke" : "eq-flash");
+    tactical_icon = ImagePath(tactical == "SMOKE" ? "eq-smoke" : "eq-flash");
     const auto material = value("flat_camo_material");
     static const char* camo_materials[] = {"ui_camoskin_brock", "ui_camoskin_bshdwl", "ui_camoskin_bwmrpt", "ui_camoskin_cmdtgr", "ui_camoskin_stagger", "ui_camoskin_gold"};
     camo_icon.clear();
-    for (const char* candidate : camo_materials) if (material == candidate) { camo_icon = icon(material); break; }
+    for (const char* candidate : camo_materials) if (material == candidate) { camo_icon = ImagePath(material); break; }
     Rml::StringList order;
     Rml::StringUtilities::ExpandString(order, value("economy_repeat_order"), ',');
     const bool rebuy_supported = order.size() == 3 && std::count(order.begin(), order.end(), "attachment") == 1 &&
@@ -193,8 +192,8 @@ void EconomyView::Update(const rml_host_t& host, bool use_fixture, double /*seco
         row.key=std::to_string(i); row.name=value(prefix+"name"); row.detail=value(prefix+"class"); row.price=value(prefix+"cash");
         row.owned=number(prefix+"frag"); row.enabled=buy_open && number(prefix+"can_give"); row.selected=number(prefix+"exists");
         if (row.selected) ++teammate_count;
-        row.icon = icon(value(prefix+"primary"));
-        row.utility = icon(value(prefix+"utility") == "weapon_flashbang" ? "eq-flash" : "eq-smoke");
+        row.icon = ImagePath(value(prefix+"primary"));
+        row.utility = UtilityImage(value(prefix+"utility"));
         const auto command=value(prefix+"give"); const Rml::String expected="openscriptmenu flat_loadout give:";
         if(command.compare(0,expected.size(),expected)==0) row.token=command.substr(expected.size());
         row.enabled = row.enabled && EconomyActionAllowed(("give:"+row.token).c_str());

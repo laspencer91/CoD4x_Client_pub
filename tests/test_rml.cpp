@@ -156,18 +156,16 @@ int main(int argc, char** argv) {
         const char* mod=RML_SOURCE_ROOT "/../promod-econ-na/ui/rml";
         if (GetFileAttributesA(mod)==INVALID_FILE_ATTRIBUTES) return 77;
         Require(RmlHost_SetSourceDirectory(client_source.c_str()) && RmlHost_SetModSourceDirectory(mod), "read passive HUD sources");
-        economy_values={{"broadcast_mode","observer"},{"broadcast_score_allies","12"},{"broadcast_score_axis","3"},
-            {"broadcast_seconds","82"},{"broadcast_round","16"},{"broadcast_target","13"},{"broadcast_alive_allies","4"},{"broadcast_alive_axis","2"},
-            {"broadcast_phase",""},{"cg_rmlCards","0"},{"rml_follow_client","2"}};
+        // Engine values (CL_Rml_Value) plus Promod's shoutcaster slots; nothing HUD-specific comes from the server.
+        economy_values={{"rml_local_team","spectator"},{"rml_score_allies","12"},{"rml_score_axis","3"},
+            {"rml_seconds_left","82"},{"ui_bomb_timer","0"},{"ui_rml_round","16"},{"cg_rmlCards","0"},{"rml_follow_client","2"}};
         const char* names[]={"^1Hi^7as","^5Cooper","^2Skubal","^3Korkunen","Giombi","Merboth","^1Biessman","Bumsky","^5Adamson","Guest"};
         for (int i=0;i<10;++i) {
-            const auto prefix="broadcast_player_"+std::to_string(i)+"_";
-            economy_values[prefix+"key"]="session_"+std::to_string(i); economy_values[prefix+"name"]=names[i];
-            economy_values[prefix+"alive"]=(i==0 || i==5 || i==7 || i==9) ? "0" : "1";
-            economy_values[prefix+"health"]=i==2 ? "75" : "100";
-            economy_values[prefix+"weapon"]=i%2 ? "ak47" : "m4";
-            economy_values[prefix+"flash"]=i%2 ? "1" : "0"; economy_values[prefix+"frag"]="1";
-            economy_values[prefix+"entity"]=std::to_string(i);
+            const auto slot=std::to_string(i);
+            economy_values["shout_client"+slot]=slot; economy_values["shout_name"+slot]=names[i];
+            economy_values["shout_health"+slot]=(i==0 || i==5 || i==7 || i==9) ? "0" : i==2 ? "0.75" : "1";
+            economy_values["shout_weapon"+slot]=i%2 ? "ak47" : "m4";
+            economy_values["shout_utility"+slot]=i%2 ? "weapon_flashbang" : "weapon_smokegrenade"; economy_values["shout_frag"+slot]="1";
         }
         RmlHost_EnableBroadcast(1);
         Device gpu; gpu.clear_color=D3DCOLOR_ARGB(255,38,38,40); gpu.Target(1920,1080);
@@ -187,13 +185,12 @@ int main(int argc, char** argv) {
         Check(D3DXSaveSurfaceToFileA(RML_TEST_OUTPUT "/rml-broadcast-expanded.png",D3DXIFF_PNG,gpu.surface,nullptr,nullptr),"capture expanded match HUD");
         economy_values["rml_follow_client"]="1"; gpu.Render(1.6);
         Require(cards[1]->IsClassSet("observed") && !cards[2]->IsClassSet("observed"), "camera highlight follows native viewed-client changes without server roster updates");
-        economy_values["broadcast_player_0_key"]="replacement_0";
-        economy_values["broadcast_player_0_name"]="Replacement"; economy_values["broadcast_player_0_alive"]="1";
+        economy_values["shout_name0"]="Replacement"; economy_values["shout_health0"]="1";
         gpu.Render(1.7);
 
         Require(cards[0]->IsClassSet("fresh") && cards[0]->GetComputedValues().opacity()==1.f && cards[0]->GetBox().GetSize().y>=63,
             "a replacement identity resets the previous occupant's death presentation immediately");
-        gpu.Render(1.75); economy_values["broadcast_player_0_alive"]="0"; gpu.Render(1.8); gpu.Render(1.9);
+        gpu.Render(1.75); economy_values["shout_health0"]="0"; gpu.Render(1.8); gpu.Render(1.9);
         Require(cards[0]->GetBox().GetSize().y>34 && cards[0]->GetBox().GetSize().y<66, "death smoothly collapses the existing identity's card");
         economy_values["cg_rmlCards"]="1"; gpu.Render(2.0); gpu.Render(2.1);
         Require(cards[1]->GetBox().GetSize().y>34 && cards[1]->GetBox().GetSize().y<66, "compact transition has an intermediate animated state");
@@ -227,20 +224,17 @@ int main(int argc, char** argv) {
             const auto faction=doc->QuerySelector(".team-score.left")->GetComputedValues().color();
             Require(faction.red==188 && faction.green==195 && faction.blue==203, "observer scores use the scoreboard's faction colours");
         }
-        economy_values["broadcast_mode"]="player"; economy_values["rml_local_team"]="axis"; gpu.Render(4.0);
+        economy_values["rml_local_team"]="axis"; gpu.Render(4.0);
         {
             gpu.Target(1920,1080); gpu.Render(4.05);
             Rml::ElementList scores; doc->QuerySelectorAll(scores,".score-value");
             Require(doc->QuerySelector(".match-score")->IsClassSet("relative") && scores.size()==2 &&
                 scores[0]->GetInnerRML()=="3" && scores[1]->GetInnerRML()=="12", "players see their own team's score on the left");
             Require(!doc->QuerySelector(".alive-count") || !doc->QuerySelector(".alive-count")->IsVisible(), "player bar omits alive counts");
-            economy_values["broadcast_target"]="0"; economy_values["broadcast_rounds"]="20"; gpu.Render(4.06);
-            {
-                auto shown=[](Rml::Element* element) { return element->GetComputedValues().display()!=Rml::Style::Display::None; };
-                Rml::ElementList parts; doc->QuerySelectorAll(parts,".round-strip > div > span");
-                Require(parts.size()==2 && shown(parts[0]) && !shown(parts[1]) && parts[0]->GetInnerRML().find("20")!=Rml::String::npos,
-                    "a round limit replaces the absent score target (Promod SD)");
-            }
+            Require(doc->QuerySelector(".round-strip > div")->GetInnerRML()=="ROUND 16", "the round number comes from server info");
+            economy_values["rml_seconds_left"]=""; gpu.Render(4.06);
+            Require(doc->QuerySelector(".match-clock")->GetInnerRML().empty(), "no engine end time shows no clock");
+            economy_values["rml_seconds_left"]="82";
             Require(doc->QuerySelector(".armor-hud")->IsClassSet("depleted"), "armor HUD stays hidden without armor");
             economy_values["economy_armor_capacity"]="2"; economy_values["economy_armor_charges"]="2"; gpu.Render(4.1); gpu.Render(4.5);
             Rml::ElementList pips; doc->QuerySelectorAll(pips,".armor-pip");

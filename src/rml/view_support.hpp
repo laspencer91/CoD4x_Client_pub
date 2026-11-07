@@ -34,6 +34,14 @@ inline bool FitStage(Rml::Context* context, int width, int height, float base_wi
 // A resize needs a second pass so layout settles at the new density.
 inline void UpdateStage(Rml::Context* context, bool resized) { context->Update(); if (resized) context->Update(); }
 
+// "images/<key>.tga" for an asset key, or empty when the key could form any other path.
+inline Rml::String ImagePath(const Rml::String& key) {
+    if (key.empty() || key.find_first_not_of("abcdefghijklmnopqrstuvwxyz0123456789_-") != Rml::String::npos) return {};
+    return "images/" + key + ".tga";
+}
+// Roster tactical grenade icon from the published utility weapon ("weapon_flashbang" or the smoke default).
+inline Rml::String UtilityImage(const Rml::String& utility) { return ImagePath(utility == "weapon_flashbang" ? "eq-flash" : "eq-smoke"); }
+
 // Clock text as m:ss; minutes are zero-padded to minute_width digits.
 inline Rml::String FormatClock(int total_seconds, size_t minute_width) {
     Rml::String minutes = std::to_string(total_seconds / 60);

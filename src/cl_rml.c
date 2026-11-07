@@ -1,6 +1,7 @@
 #include "q_shared.h"
 #include "qcommon.h"
 #include "client.h"
+#include "cg_shared.h"
 #include "cl_input.h"
 #include "r_shared.h"
 #include "ui_shared.h"
@@ -15,7 +16,7 @@
 /* The native mouse route uses bit 0x10 for modal menus. */
 #define RML_MENU_CATCHER 0x10
 static cvar_t *rml_enabled;
-static cvar_t *rml_economy;
+static cvar_t *rml_economy, *rml_broadcast, *rml_cards;
 static qboolean rml_captured;
 static int rml_previous_catcher, rml_modifiers;
 static struct { menuDef_t *menu; int item_count; } rml_menus[4];
@@ -64,17 +65,44 @@ void CL_Rml_Hide(void)
 
 void CL_Rml_FocusLost(void)
 {
-    if (!rml_menus[0].menu) { CL_Rml_Hide(); return; }
+    if (!RmlHost_Visible()) return;
     RmlHost_ClearInput();
     rml_modifiers = 0;
     CL_ShowSystemCursor(1);
 }
 
+static const char* CL_Rml_Value(const char* name)
+{
+    static char color[10];
+    if (!strcmp(name,"rml_follow_client")) {
+        const snapshot_t* snap=cg.nextSnap ? cg.nextSnap : cg.snap;
+        const int followed=snap && (snap->ps.otherFlags & 2) && !cg.inKillCam ? snap->ps.clientNum : -1;
+        Com_sprintf(color,sizeof(color),"%d",followed); return color;
+    }
+    if (!strcmp(name,"rml_name_color_8") || !strcmp(name,"rml_name_color_9")) {
+        unsigned char rgba[4];
+        RB_LookupColor(name[15],(char*)rgba);
+        Com_sprintf(color,sizeof(color),"#%02x%02x%02x%02x",rgba[0],rgba[1],rgba[2],rgba[3]);
+        return color;
+    }
+    return Cvar_GetString(name);
+}
+static int CL_Rml_EnsureHost(void)
+{
+    const rml_host_t host = {FS_ReadFile, FS_FreeFile, CL_Rml_Log, CL_Rml_Sound, CL_Rml_Time, CL_Rml_Value, CL_Rml_Response};
+    return RmlHost_Init(&host);
+}
+static void CL_Rml_Cards_f(void) { Cvar_SetInt(rml_cards,(rml_cards->integer+1)%3); }
+void CL_Rml_Disconnect(void)
+{
+    CL_Rml_Hide(); RmlHost_EnableBroadcast(0);
+    Cvar_SetStringByName("broadcast_active","0"); Cvar_SetStringByName("ui_rml_broadcast_drawn","0");
+}
+
 static qboolean CL_Rml_Show(rml_screen_t screen)
 {
     POINT cursor;
-    const rml_host_t host = {FS_ReadFile, FS_FreeFile, CL_Rml_Log, CL_Rml_Sound, CL_Rml_Time, Cvar_GetString, CL_Rml_Response};
-    if (!RmlHost_Init(&host) || !RmlHost_Open(screen)) {
+    if (!CL_Rml_EnsureHost() || !RmlHost_Open(screen)) {
         CL_Rml_Hide();
         CL_Rml_Log("diagnostic load failed; native UI remains available");
         return qfalse;
@@ -85,7 +113,7 @@ static qboolean CL_Rml_Show(rml_screen_t screen)
         rml_cursor_x = cursor.x; rml_cursor_y = cursor.y;
         RmlHost_MouseMove(cursor.x, cursor.y);
     }
-    CL_ShowSystemCursor(!rml_cursor || Material_IsDefault(rml_cursor));
+    CL_ShowSystemCursor(!IN_AppActive() || !rml_cursor || Material_IsDefault(rml_cursor));
     if (!rml_captured) {
         Key_ClearStates(0);
         rml_previous_catcher = clientUIActives.keyCatchers & RML_MENU_CATCHER;
@@ -176,6 +204,8 @@ static void CL_Rml_Status_f(void)
         stats.visible, stats.recorded_frames, stats.rendered_frames, stats.draw_calls,
         stats.geometry_uploads, stats.texture_uploads, stats.pending_frames, (unsigned)stats.last_render_result,
         stats.source_reloads, stats.source_failures, stats.activations);
+    Com_Printf(CON_CHANNEL_UI,"RmlUi broadcast: ready=%d drawn=%d captured=%d mode=%s cards=%d\n",
+        RmlHost_BroadcastReady(),Cvar_GetInt("ui_rml_broadcast_drawn"),rml_captured,Cvar_GetString("broadcast_mode"),rml_cards->integer);
     Com_Printf(CON_CHANNEL_UI,"RmlUi economy: cash=%s frag=%s armor=%s buy=%d allowed=%d adopted=%d\n",
         Cvar_GetString("economy_cash"),Cvar_GetString("economy_frag_owned"),Cvar_GetString("economy_armor_charges"),
         Cvar_GetInt("economy_buy_open"),Cvar_GetInt("economy_purchase_allowed"),rml_menus[0].menu!=NULL);
@@ -191,6 +221,9 @@ void CL_Rml_Init(void)
 #endif
     rml_enabled = Cvar_RegisterBool("r_rmlUi", qtrue, 0, "Enable the optional RmlUi host");
     rml_economy = Cvar_RegisterBool("r_rmlEconomy", qtrue, 0, "Use RmlUi for class/loadout menus, with native fallback");
+    rml_broadcast = Cvar_RegisterBool("cg_rmlBroadcast", qtrue, CVAR_ARCHIVE, "Use the passive match and spectator HUD");
+    rml_cards = Cvar_RegisterInt("cg_rmlCards",0,0,2,CVAR_ARCHIVE,"Observer cards: 0 expanded, 1 compact, 2 hidden");
+    Cmd_AddCommand("rml_cards_toggle", CL_Rml_Cards_f);
     Cmd_AddCommand("rml_show", CL_Rml_Show_f);
     Cmd_AddCommand("rml_palette", CL_Rml_Palette_f);
     Cmd_AddCommand("rml_economy_preview", CL_Rml_EconomyPreview_f);
@@ -213,6 +246,7 @@ void CL_Rml_Shutdown(void)
 void CL_Rml_Frame(void)
 {
     uint32_t ticket;
+    int queued;
 #ifdef COD4X_TEST_ISOLATION
     if (rml_test_x >= 0) {
         if (Sys_Milliseconds() > rml_test_deadline) { rml_test_x=-1; CL_Rml_Log("test click expired waiting for an eligible native economy menu"); }
@@ -246,20 +280,29 @@ void CL_Rml_Frame(void)
         }
     }
     if (rml_menus[0].menu && !rml_economy->boolean) CL_Rml_Hide();
-    if (!rml_enabled || !rml_enabled->boolean || !RmlHost_Visible()) {
+    {
+        const int draw_hud=rml_enabled && rml_enabled->boolean && rml_broadcast->boolean &&
+            Cvar_GetInt("broadcast_active") && Cvar_GetInt("cg_draw2D") && !cg.inKillCam && !uiMem.uiInfo.uiDC.openMenuCount && !(clientUIActives.keyCatchers & KEYCATCH_CONSOLE);
+        if (draw_hud) CL_Rml_EnsureHost();
+        RmlHost_EnableBroadcast(draw_hud);
+    }
+    if (!rml_enabled || !rml_enabled->boolean || (!RmlHost_Visible() && !Cvar_GetInt("broadcast_active"))) {
+        Cvar_SetStringByName("ui_rml_broadcast_drawn","0");
         if (rml_captured) CL_Rml_Hide();
         return;
     }
     ticket = RmlHost_Record(_vidConfig.displayWidth, _vidConfig.displayHeight, Sys_Milliseconds() / 1000.0);
-    if (ticket && !R_QueueRmlFrame(ticket)) RmlHost_Discard(ticket);
-    if (ticket && IN_AppActive() && !(clientUIActives.keyCatchers & KEYCATCH_CONSOLE) && rml_cursor && !Material_IsDefault(rml_cursor)) {
+    queued=ticket && R_QueueRmlFrame(ticket);
+    Cvar_SetStringByName("ui_rml_broadcast_drawn",queued && RmlHost_BroadcastReady() ? "1" : "0");
+    if (ticket && !queued) RmlHost_Discard(ticket);
+    if (ticket && RmlHost_Visible() && IN_AppActive() && !(clientUIActives.keyCatchers & KEYCATCH_CONSOLE) && rml_cursor && !Material_IsDefault(rml_cursor)) {
         const float size = 32.0f * _vidConfig.displayHeight / 480.0f;
         /* ui_cursor's arrow tip is at the centre of its transparent texture. */
         R_AddCmdDrawStretchPic(rml_cursor_x - size * 0.5f, rml_cursor_y - size * 0.5f,
             size, size, 0, 0, 1, 1, colorWhite, rml_cursor);
         CL_ShowSystemCursor(0);
     }
-    if (!RmlHost_Visible()) CL_Rml_Hide();
+    if (rml_captured && !RmlHost_Visible()) CL_Rml_Hide();
 }
 
 int CL_Rml_KeyEvent(int key, int down)
@@ -302,6 +345,6 @@ int CL_Rml_MouseEvent(int x, int y)
     if (!IN_AppActive() || !rml_captured || !RmlHost_Visible() || (clientUIActives.keyCatchers & KEYCATCH_CONSOLE)) return 0;
     RmlHost_MouseMove(x, y);
     rml_cursor_x = x; rml_cursor_y = y;
-    CL_ShowSystemCursor(!rml_cursor || Material_IsDefault(rml_cursor));
+    CL_ShowSystemCursor(!IN_AppActive() || !rml_cursor || Material_IsDefault(rml_cursor));
     return 1;
 }

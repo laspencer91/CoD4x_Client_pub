@@ -58,7 +58,7 @@ void EconomyView::Init(Rml::Context* context) {
     BIND(primary); BIND(secondary);    BIND(armor_price);  BIND(frag_price);
     BIND(tactical); BIND(camo); BIND(feedback); BIND(deploy_label);  BIND(demo_price);  BIND(focus_body);
 
-    BIND(primary_icon); BIND(secondary_icon); BIND(tactical_icon); BIND(camo_icon);
+    BIND(primary_icon); BIND(secondary_icon); BIND(tactical_icon); BIND(camo_icon); BIND(name_color8); BIND(name_color9);
     BIND(suppressor_price); BIND(reflex_price); BIND(pistol_price); BIND(class_family);
     BIND(economy_mode); BIND(teammate_count); BIND(scope); BIND(buy_warning); BIND(buy_urgent);
     BIND(rebuy_rows);
@@ -66,19 +66,30 @@ void EconomyView::Init(Rml::Context* context) {
     BIND(buy_open); BIND(purchase_allowed); BIND(has_class); BIND(armor_buy); BIND(frag_buy); BIND(armor_one); BIND(armor_two);
     BIND(armor_refund); BIND(frag_owned); BIND(frag_refund); BIND(suppressor_buy); BIND(reflex_buy);  BIND(pistol_buy); BIND(repeat);
     BIND(primary_silencer); BIND(primary_reflex); BIND(secondary_silencer); BIND(primary_none);
-    BIND(confirmation); BIND(primary_picker); BIND(pistol_picker); BIND(pending); BIND(preview); BIND(debit);  BIND(balance_change);
+    BIND(preview); BIND(debit);  BIND(balance_change);
 #undef BIND
+    constructor.BindFunc("primary_picker", [this](Rml::Variant& v) { v = overlay == Overlay::PrimaryPicker; });
+    constructor.BindFunc("pistol_picker", [this](Rml::Variant& v) { v = overlay == Overlay::PistolPicker; });
+    constructor.BindFunc("confirmation", [this](Rml::Variant& v) { v = overlay == Overlay::Confirmation; });
+    // Background controls disable themselves with data-attrif-disabled="modal_open".
+    constructor.BindFunc("modal_open", [this](Rml::Variant& v) { v = overlay != Overlay::None; });
     model = constructor.GetModelHandle();
     focus_body = "";
 }
 void EconomyView::Reset() {
-    model = {}; ui_context = nullptr; pending_focus = 0;
+    model = {}; ui_context = nullptr; pending_focus = Focus::None;
     values.clear(); roles.clear(); weapons.clear(); pistols.clear(); mates.clear(); rebuy_rows.clear();
     preview_state.Reset();
-    held_gift.clear(); held_rebuy.clear(); hovered.clear(); last_hover = silent_hover_until = -1;
-    previous_cash = -1; pending = confirmation = primary_picker = pistol_picker = false;
+    held_gift.clear(); held_rebuy.clear(); audio.Reset();
+    previous_cash = -1; overlay = Overlay::None;
 }
-void EconomyView::Dialog(bool value) { confirmation = value; primary_picker = pistol_picker = false; pending_focus = 0; if (model) model.DirtyVariable("confirmation"); }
+void EconomyView::Dialog(bool value) { SetOverlay(value ? Overlay::Confirmation : Overlay::None, Focus::None); }
+void EconomyView::SetOverlay(Overlay next, Focus focus) {
+    pending_focus = focus;
+    if (overlay == next) return;
+    overlay = next;
+    if (model) for (const char* name : {"primary_picker", "pistol_picker", "confirmation", "modal_open"}) model.DirtyVariable(name);
+}
 Rml::String EconomyView::Value(const rml_host_t& host, const Rml::String& name, bool use_fixture) {
     Rml::String result;
     if (use_fixture) result = preview_state.Value(name);
@@ -91,11 +102,12 @@ void EconomyView::Update(const rml_host_t& host, bool use_fixture, double second
     if (!model) return;
     auto value = [&](const Rml::String& key) { return Value(host, key, use_fixture); };
     auto number = [&](const Rml::String& key) { return std::atoi(value(key).c_str()); };
+    auto money = [&](const Rml::String& key) { return "$" + value(key); };
+    name_color8=value("rml_name_color_8"); name_color9=value("rml_name_color_9");
     preview = use_fixture;
     const bool next_economy_mode = use_fixture || value("flat_loadout_mode") != "standard";
-    if (economy_mode != next_economy_mode) { focus_body.clear(); pending = false; model.DirtyAllVariables(); }
+    if (economy_mode != next_economy_mode) { focus_body.clear(); model.DirtyAllVariables(); }
     economy_mode = next_economy_mode;
-    const auto before = values;
     const int cash = number("economy_cash"); wallet = "$" + std::to_string(cash);
     buy_open = number("economy_buy_open") != 0; purchase_allowed = number("economy_purchase_allowed") != 0;
     has_class = number("flat_has_class") != 0;
@@ -107,7 +119,7 @@ void EconomyView::Update(const rml_host_t& host, bool use_fixture, double second
     if (!buy_open) countdown = "";
     map = value("mapname"); if (map.compare(0,3,"mp_") == 0) map.erase(0,3);
     std::transform(map.begin(), map.end(), map.begin(), [](unsigned char c){return char(std::toupper(c));});
-    team = value("flat_team"); demo_price = "$" + value("economy_demolition_price");
+    team = value("flat_team"); demo_price = money("economy_demolition_price");
     const auto selected = value("loadout_class");
     scope = selected == "sniper";
     class_family = scope ? "SNIPER RIFLE" : selected == "specops" ? "SUBMACHINE GUN" : selected == "demolitions" ? "SHOTGUN" : "ASSAULT RIFLE";
@@ -136,10 +148,10 @@ void EconomyView::Update(const rml_host_t& host, bool use_fixture, double second
     if (!economy_mode) reflex_buy = has_class && (selected == "assault" || selected == "specops") && number("attach_allow_" + selected + "_reflex") && value("loadout_primary") != "mp44" && value("loadout_primary") != "uzi";
     pistol_buy = has_class && value("loadout_secondary") != "deserteagle" && value("loadout_secondary") != "deserteaglegold" && number("attach_allow_pistol_silencer") &&
         (!economy_mode || number("economy_suppressor_secondary_owned") || (buy_open && purchase_allowed && cash >= number("economy_suppressor_price")));
-    suppressor_price = number("economy_suppressor_primary_owned") ? "OWNED" : "$" + value("economy_suppressor_price");
-    reflex_price = reflex_free ? "FREE" : number("economy_red_dot_owned") ? "OWNED" : "$" + value("economy_red_dot_price");
+    suppressor_price = number("economy_suppressor_primary_owned") ? "OWNED" : money("economy_suppressor_price");
+    reflex_price = reflex_free ? "FREE" : number("economy_red_dot_owned") ? "OWNED" : money("economy_red_dot_price");
     pistol_price = (value("loadout_secondary") == "deserteagle" || value("loadout_secondary") == "deserteaglegold") ? "N/A" :
-        number("economy_suppressor_secondary_owned") ? "OWNED" : "$" + value("economy_suppressor_price");
+        number("economy_suppressor_secondary_owned") ? "OWNED" : money("economy_suppressor_price");
     weapons.clear(); const int count = std::max(0, std::min(number("flat_primary_rows"), 7));
     for (int i=0; i<count; ++i) { EconomyOption row; const auto ref = value("flat_primary_" + std::to_string(i) + "_ref");
         row.key = std::to_string(i); row.detail = std::to_string(i + 1); row.name = WeaponName(ref); row.icon = icon(ref); row.enabled = has_class && !ref.empty(); row.selected = ref == value("loadout_primary");
@@ -148,10 +160,10 @@ void EconomyView::Update(const rml_host_t& host, bool use_fixture, double second
     pistols.clear();
     for (const char* ref : pistol_keys) { EconomyOption row; row.key=ref; row.detail=std::to_string(pistols.size()+1); row.name=WeaponName(ref); row.icon=icon(ref); row.enabled=has_class && number("weap_allow_"+row.key); row.selected=row.key==value("loadout_secondary"); row.state=row.selected ? "EQUIPPED" : economy_mode ? "FREE" : ""; pistols.push_back(row); }
     const int charges = number("economy_armor_charges"); armor_one = charges >= 1; armor_two = charges >= 2;
-    armor_price = "$" + value("economy_armor_price"); armor_buy = has_class && number("economy_can_buy_armor");
+    armor_price = money("economy_armor_price"); armor_buy = has_class && number("economy_can_buy_armor");
     armor_refund = buy_open && purchase_allowed && number("economy_armor_refundable");
     frag_owned = number(economy_mode ? "economy_frag_owned" : "weap_allow_frag_grenade");
-    frag_price = "$" + value("economy_frag_price"); frag_buy = has_class && number("economy_can_buy_frag"); frag_refund = number("economy_frag_refundable");
+    frag_price = money("economy_frag_price"); frag_buy = has_class && number("economy_can_buy_frag"); frag_refund = number("economy_frag_refundable");
     tactical = value("flat_utility_name"); camo = value("flat_camo_label"); repeat = number("economy_repeat_enabled");
     tactical_icon = icon(tactical == "SMOKE" ? "eq-smoke" : "eq-flash");
     const auto material = value("flat_camo_material");
@@ -170,7 +182,7 @@ void EconomyView::Update(const rml_host_t& host, bool use_fixture, double second
         if ((row.key == "attachment" && (saved.empty() || saved == "none")) || (row.key != "attachment" && std::atoi(saved.c_str()) <= 0)) continue;
         row.name = row.key == "attachment" ? "WEAPON UPGRADE" : row.key == "frag" ? "FRAG" : "ARMOR";
         if (row.key == "attachment") row.name = saved == "silencer" ? "SUPPRESSOR" : "RED DOT";
-        row.price = "$" + value(row.key == "attachment" ? (saved == "silencer" ? "economy_suppressor_price" : "economy_red_dot_price") : row.key == "frag" ? "economy_frag_price" : "economy_armor_price");
+        row.price = money(row.key == "attachment" ? (saved == "silencer" ? "economy_suppressor_price" : "economy_red_dot_price") : row.key == "frag" ? "economy_frag_price" : "economy_armor_price");
         rebuy_rows.push_back(row);
     }
     for (size_t i = 0; i < rebuy_rows.size(); ++i) {
@@ -194,8 +206,6 @@ void EconomyView::Update(const rml_host_t& host, bool use_fixture, double second
     if (previous_cash >= 0 && previous_cash != cash) { int delta=cash-previous_cash; debit=delta<0;
         balance_change=(delta>0?"+ $":"- $")+std::to_string(std::abs(delta)); model.DirtyVariable("balance_change"); }
     previous_cash=cash;
-    if(pending && (before != values || seconds-submitted>2.0)) {pending=false; model.DirtyVariable("pending");}
-    if(before != values) model.DirtyAllVariables();
 }
 bool EconomyView::Submit(const Rml::String& action, const rml_host_t& host, bool use_fixture, double seconds) {
     if (!EconomyActionAllowed(action.c_str())) return false;
@@ -203,15 +213,15 @@ bool EconomyView::Submit(const Rml::String& action, const rml_host_t& host, bool
         if (action == "close") return true;
         if (action == "select:demolitions" && preview_state.Value("economy_demolition_owned") != "1" &&
             std::atoi(preview_state.Value("economy_cash").c_str()) >= std::atoi(preview_state.Value("economy_demolition_price").c_str())) {
-            confirmation = true; pending_focus = 5; model.DirtyVariable("confirmation"); return false;
+            SetOverlay(Overlay::Confirmation, Focus::ConfirmButton); return false;
         }
-        if (action == "confirm_demolition") { preview_state.Apply("select:demolitions"); confirmation = false; }
-        else if (action == "cancel_demolition") confirmation = false;
+        if (action == "confirm_demolition") { preview_state.Apply("select:demolitions"); SetOverlay(Overlay::None, Focus::None); }
+        else if (action == "cancel_demolition") SetOverlay(Overlay::None, Focus::None);
         else preview_state.Apply(action);
         model.DirtyAllVariables();
         return false;
     }
-    if(host.menu_response && host.menu_response(action.c_str())) { pending=true; submitted=seconds; model.DirtyVariable("pending"); }
+    if (host.menu_response) host.menu_response(action.c_str());
     return false;
 }
 bool EconomyView::Event(Rml::Event& event, const rml_host_t& host, bool use_fixture, double seconds) {
@@ -228,6 +238,7 @@ bool EconomyView::Event(Rml::Event& event, const rml_host_t& host, bool use_fixt
             (buy_open && purchase_allowed && (refund=="refund_silencer" || refund=="refund_reflex" || refund=="refund_pistol_silencer"))) Submit(refund,host,use_fixture,seconds);
         return false;
     }
+    // Capture row identity on press: a model refresh can reorder rows before the click arrives.
     if(event.GetType()=="mousedown" || event.GetType()=="keydown") {
         held_gift=control->GetAttribute<Rml::String>("data-token", "");
         held_rebuy=control->GetAttribute<Rml::String>("data-value", "");
@@ -235,47 +246,50 @@ bool EconomyView::Event(Rml::Event& event, const rml_host_t& host, bool use_fixt
     if(event.GetType()=="mouseover" || event.GetType()=="focus") {
         if (event.GetType()=="mouseover" && (action=="primary" || action=="secondary") && !control->HasAttribute("disabled")) control->Focus();
         const auto identity=action+control->GetAttribute<Rml::String>("data-value", "")+control->GetAttribute<Rml::String>("data-token", "");
-        if(identity!=hovered) {hovered=identity;if(event.GetType()=="mouseover" && seconds>=silent_hover_until && seconds-last_hover>=0.075 && host.play_sound){host.play_sound("mouse_over");last_hover=seconds;}}
+        // Programmatic focus (picker open/close) updates identity without a cue.
+        audio.Hover(identity, event.GetType()=="mouseover", host, seconds);
         focus_body=control->GetAttribute<Rml::String>("data-help", "");
         model.DirtyVariable("focus_body"); return false;
     }
     if(control->HasAttribute("disabled")) return false;
     if(event.GetType()!="click") return false;
-    silent_hover_until = seconds + 0.35;
-    if(host.play_sound) host.play_sound("mouse_click");
+    audio.Click(host, seconds);
     if(action=="primary-picker") {TogglePicker(true);return false;}
     if(action=="pistol-picker") {TogglePicker(false);return false;}
+    if (action=="primary" || action=="secondary") {
+        ChooseWeapon(action=="primary",control->GetAttribute<Rml::String>("data-value", ""),host,use_fixture,seconds); return false;
+    }
     Rml::String response=action;
     if(action=="class") response="select:"+control->GetAttribute<Rml::String>("data-value", "");
-    if(action=="primary") response="pick_primary:"+control->GetAttribute<Rml::String>("data-value", "");
-    if(action=="secondary") response="secondary:"+control->GetAttribute<Rml::String>("data-value", "");
     if(action=="pistol-suppressor") response=secondary_silencer ? "pistol_attachment:none" : "pistol_attachment:silencer";
     if(action=="rebuy-up" || action=="rebuy-down") response=(action=="rebuy-up" ? "rebuy_up:" : "rebuy_down:") + held_rebuy;
     if(action=="give") response="give:"+held_gift;
-    if(action=="primary" || action=="secondary") {pending_focus=action=="primary" ? 3 : 4;primary_picker=pistol_picker=false;model.DirtyVariable("primary_picker");model.DirtyVariable("pistol_picker");}
     return Submit(response,host,use_fixture,seconds);
 }
+void EconomyView::ChooseWeapon(bool primary, const Rml::String& key, const rml_host_t& host, bool fixture, double seconds) {
+    Submit((primary ? "pick_primary:" : "secondary:")+key,host,fixture,seconds);
+    SetOverlay(Overlay::None, primary ? Focus::PrimaryCard : Focus::PistolCard);
+}
 void EconomyView::TogglePicker(bool primary) {
-    const bool open = !(primary ? primary_picker : pistol_picker);
-    primary_picker = primary && open; pistol_picker = !primary && open;
-    pending_focus = open ? (primary ? 1 : 2) : (primary ? 3 : 4);
-    model.DirtyVariable("primary_picker"); model.DirtyVariable("pistol_picker");
+    const Overlay picker = primary ? Overlay::PrimaryPicker : Overlay::PistolPicker;
+    if (overlay == picker) SetOverlay(Overlay::None, primary ? Focus::PrimaryCard : Focus::PistolCard);
+    else SetOverlay(picker, primary ? Focus::PrimaryList : Focus::PistolList);
 }
 void EconomyView::Dismiss(const Rml::String& action, const rml_host_t& host, bool fixture, double seconds) {
-    if (action == "primary-picker" && primary_picker) TogglePicker(true);
-    else if (action == "pistol-picker" && pistol_picker) TogglePicker(false);
-    else if (action == "cancel_demolition" && confirmation) Submit(action, host, fixture, seconds);
+    if (action == "primary-picker" && overlay == Overlay::PrimaryPicker) TogglePicker(true);
+    else if (action == "pistol-picker" && overlay == Overlay::PistolPicker) TogglePicker(false);
+    else if (action == "cancel_demolition" && overlay == Overlay::Confirmation) Submit(action, host, fixture, seconds);
 }
 bool EconomyView::ResolveFocus() {
-    if (!pending_focus || !ui_context) return false;
-    const int target = pending_focus; pending_focus = 0;
+    if (pending_focus == Focus::None || !ui_context) return false;
+    const Focus target = pending_focus; pending_focus = Focus::None;
     auto* doc = ui_context->GetDocument(0); if (!doc) return false;
-    if (target == 5) { auto* button = doc->GetElementById("confirm-demolition"); return button && button->Focus(); }
-    if (target >= 3) {
-        auto* button = doc->GetElementById(target == 3 ? "primary-picker" : "secondary-picker");
+    if (target == Focus::ConfirmButton) { auto* button = doc->GetElementById("confirm-demolition"); return button && button->Focus(); }
+    if (target == Focus::PrimaryCard || target == Focus::PistolCard) {
+        auto* button = doc->GetElementById(target == Focus::PrimaryCard ? "primary-picker" : "secondary-picker");
         return button && !button->HasAttribute("disabled") && button->Focus();
     }
-    auto* panel = doc->GetElementById(target == 1 ? "primary-drawer" : "secondary-drawer");
+    auto* panel = doc->GetElementById(target == Focus::PrimaryList ? "primary-drawer" : "secondary-drawer");
     if (!panel) return false;
     Rml::ElementList buttons; panel->QuerySelectorAll(buttons, ".picker-row input");
     Rml::Element* first = nullptr;
@@ -286,12 +300,11 @@ bool EconomyView::ResolveFocus() {
     return first && first->Focus();
 }
 bool EconomyView::Shortcut(int key, const rml_host_t& host, bool use_fixture, double seconds) {
+    const bool primary_picker = overlay == Overlay::PrimaryPicker, pistol_picker = overlay == Overlay::PistolPicker;
     if (key == RML_KEY_ESCAPE && (primary_picker || pistol_picker)) {
-        pending_focus = primary_picker ? 3 : 4;
-        primary_picker = pistol_picker = false;
-        model.DirtyVariable("primary_picker"); model.DirtyVariable("pistol_picker"); return true;
+        SetOverlay(Overlay::None, primary_picker ? Focus::PrimaryCard : Focus::PistolCard); return true;
     }
-    if (confirmation) return key >= '1' && key <= '5';
+    if (overlay == Overlay::Confirmation) return key >= '1' && key <= '5';
     if ((key == 'q' || key == 'Q') && has_class && !pistol_picker) {
         TogglePicker(true); return true;
     }
@@ -315,9 +328,7 @@ bool EconomyView::Shortcut(int key, const rml_host_t& host, bool use_fixture, do
             auto& rows = primary_picker ? weapons : pistols;
             const size_t index = size_t(key - '1');
             if (index < rows.size() && rows[index].enabled) {
-                Submit((primary_picker ? "pick_primary:" : "secondary:") + rows[index].key, host, use_fixture, seconds);
-                pending_focus = primary_picker ? 3 : 4;
-                primary_picker = pistol_picker = false; model.DirtyVariable("primary_picker"); model.DirtyVariable("pistol_picker");
+                ChooseWeapon(primary_picker,rows[index].key,host,use_fixture,seconds);
             }
             return true;
         }

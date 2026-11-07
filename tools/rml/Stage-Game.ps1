@@ -57,6 +57,7 @@ if (!(Test-Path -LiteralPath "$appdata\players\profiles\active.txt")) {
 bind F8 "rml_palette"
 bind F7 "rml_economy_preview"
 bind F9 "rml_reload"
+bind F10 "rml_cards_toggle"
 set r_fullscreen 0
 set r_mode "1280x800"
 set com_maxfps 60

@@ -41,3 +41,24 @@ The same economy document/controller also renders standard loadouts. The server 
 Regular class limits and server equipment eligibility remain authoritative. Standard mode never applies the lab's forced slot limits or Demolition purchase confirmation. No second live controller or copied document was introduced. Changing mode clears stale hover help and pending UI state. The spectator HUD inventory is separate; a passive HUD path has not been implemented by this menu change.
 
 2026-11-07 menu feedback fixes: stock `ui_mp/cac_ingame.inc::LOCAL_PRIMARY_WEAPON_ACTION` locally sets the displayed weapon before its server response; the RML native bridge now does the same for allowlisted primary/sidearm choices. Focus loss clears held input while retaining adopted menu suppression and presentation, rather than restoring native visuals. Standalone tests verify visible input clearing and canceled held clicks; all six CTests pass (9.17s). Hover audio ignores programmatic focus and is suppressed briefly after a click. Native human audio/focus verification remains a separate check.
+
+## Authoring conventions (2026-11-07)
+
+- **Modal guard.** Background economy controls use `data-attrif-disabled="modal_open"`, combined with their own eligibility (`!frag_buy || modal_open`). `EconomyView` holds one `Overlay` state; `primary_picker`, `pistol_picker`, `confirmation` and `modal_open` are derived bindings, so a new overlay cannot leave one flag stale. Change overlays only through `SetOverlay`, which also requests the next focus target.
+- **Markup layout.** Keep one element per line. Line breaks between tags are inert because RmlUi drops whitespace-only text; keep text and inline spans that must touch on one line.
+- **Staggered motion.** Delay a shared keyframe instead of writing hold segments: `animation: 0.3s 0.1s exponential-out stagger-in;`. Vendor patch 0001 shows the first keyframe during the delay, so delayed rows do not flash their resting state.
+- **UI audio.** `UiAudio` in `src/rml/ui_audio.hpp` owns hover/click cue rules (one cue per control change, 75 ms rate limit, 350 ms mute after a click). Screens call it rather than playing `mouse_over` directly.
+
+## Passive HUD and component unification (2026-11-07)
+
+The match HUD uses its own passive context, `cod4x-broadcast`; menu visibility and input capture remain separate. It never installs menu event handlers or a key catcher. `cg_rmlBroadcast` enables S&D match presentation; `cg_rmlCards` owns expanded/compact/hidden state, with a named card-mode enum and an explicit last-visible layout. The private runner binds F10 to `rml_cards_toggle`. Other profiles keep their own key bindings.
+
+Common `.game-ui` typography/color tokens, `.canvas-1080` menu/modal geometry and `.viewport-fill` HUD anchoring live in `shared/hardware.rcss`. Surface positioning remains explicit where needed; existing economy/palette relative surfaces were preserved. Picker/camo override blocks were consolidated. `ChooseWeapon` owns mouse and numbered weapon selection alike. The PENDING label was removed because its previous dvar-change heuristic was not a server acknowledgement; actual server status and authoritative values remain.
+
+`<player-name data-attr-text="mate.name" data-attr-color-8="name_color8" data-attr-color-9="name_color9" />` is reused by buy and observer rows. It builds literal text nodes with CoD color runs, matching `rb_backend.c`'s 17-entry palette. Viewer-dependent colors 8/9 come from the native renderer. Invalid/trailing carets remain literal. Inputs over 512 bytes fall back to PLAYER; ordinary names stay text, never markup.
+
+The broadcaster keeps ten stable row objects, with independent presence and identity. Identity changes reset inherited transitions for one update; health/death changes animate within the same identity. Dead cards collapse and stacks reflow. Hidden mode keeps the score bar and last visible layout. Native snapshot client identity supplies the observed marker, using the existing following-name HUD's condition. Full-observer roster transport is server-gated and is cleared on return to a team.
+
+Shared source saves reload both documents; F9 can reload a passive HUD without opening a menu. Native HUD suppression follows successful frame queueing, not just document readiness. Disconnect clears readiness, and the main HUD/menu/console/killcam gates remain in force. All developer menu screens now retain their presentation on focus loss while clearing held input.
+
+Seven CTests pass, including passive D3D9 rendering, viewport edges, transitions, identity replacement, color text and input/reload checks. The sibling mod's broadcast guide/evidence record dedicated tests and scoped native process 8928 integration. Personalized portraits, precise ammo detail, H1-specific source timings and full multiplayer/performance acceptance remain separate work.

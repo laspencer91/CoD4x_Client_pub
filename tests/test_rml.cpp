@@ -10,6 +10,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <algorithm>
 #include <vector>
 #include <map>
 
@@ -149,6 +150,83 @@ int main(int argc, char** argv) {
     }
     const rml_host_t host = {ReadFile, std::free, Log, Sound, nullptr, EconomyValue, EconomyResponse};
     Require(RmlHost_Init(&host), "initialize actual core and FreeType");
+    if (argc > 1 && std::strcmp(argv[1], "--broadcast") == 0) {
+        fixture=false;
+        const std::string client_source=std::string(root)+"/ui/rml";
+        const char* mod=RML_SOURCE_ROOT "/../promod-econ-na/ui/rml";
+        if (GetFileAttributesA(mod)==INVALID_FILE_ATTRIBUTES) return 77;
+        Require(RmlHost_SetSourceDirectory(client_source.c_str()) && RmlHost_SetModSourceDirectory(mod), "read passive HUD sources");
+        economy_values={{"broadcast_mode","observer"},{"broadcast_score_allies","12"},{"broadcast_score_axis","3"},
+            {"broadcast_seconds","82"},{"broadcast_round","16"},{"broadcast_target","13"},{"broadcast_alive_allies","4"},{"broadcast_alive_axis","2"},
+            {"broadcast_phase",""},{"cg_rmlCards","0"},{"rml_follow_client","2"}};
+        const char* names[]={"^1Hi^7as","^5Cooper","^2Skubal","^3Korkunen","Giombi","Merboth","^1Biessman","Bumsky","^5Adamson","Guest"};
+        for (int i=0;i<10;++i) {
+            const auto prefix="broadcast_player_"+std::to_string(i)+"_";
+            economy_values[prefix+"key"]="session_"+std::to_string(i); economy_values[prefix+"name"]=names[i];
+            economy_values[prefix+"alive"]=(i==0 || i==5 || i==7 || i==9) ? "0" : "1";
+            economy_values[prefix+"health"]=i==2 ? "75" : "100";
+            economy_values[prefix+"weapon"]=i%2 ? "ak47" : "m4";
+            economy_values[prefix+"flash"]=i%2 ? "1" : "0"; economy_values[prefix+"frag"]="1";
+            economy_values[prefix+"entity"]=std::to_string(i);
+        }
+        RmlHost_EnableBroadcast(1);
+        Device gpu; gpu.clear_color=D3DCOLOR_ARGB(255,38,38,40); gpu.Target(1920,1080);
+        gpu.Render(1.0); gpu.Render(1.3);
+        Require(RmlHost_BroadcastReady() && !RmlHost_Visible(), "passive HUD renders without a captured menu");
+        auto* doc=Rml::GetContext("cod4x-broadcast")->GetDocument(0);
+        Require(doc->QuerySelector(".match-clock")->GetInnerRML()=="1:22", "HUD reads the authoritative round clock");
+        Rml::ElementList cards; doc->QuerySelectorAll(cards,".player-card");
+        cards.erase(std::remove_if(cards.begin(),cards.end(),[](Rml::Element* element) { return !element->IsVisible(); }),cards.end());
+        Require(cards.size()==10 && cards[0]->IsClassSet("dead") && cards[2]->IsClassSet("observed"), "shared cards reflect dead and observed states");
+        auto* name=cards[0]->QuerySelector("player-name");
+        Require(name->GetNumChildren()==2 && name->GetChild(0)->GetInnerRML()=="Hi", "player name preserves game color runs");
+        name->SetAttribute("text", "^1<img src='x' />^7Z^"); gpu.Render(1.4);
+        Require(name->QuerySelector("img")==nullptr && name->GetNumChildren()==2, "player names stay text and preserve a trailing caret");
+        name->SetAttribute("text", names[0]); gpu.Render(1.5);
+        Check(D3DXSaveSurfaceToFileA(RML_TEST_OUTPUT "/rml-broadcast-expanded.png",D3DXIFF_PNG,gpu.surface,nullptr,nullptr),"capture expanded match HUD");
+        economy_values["rml_follow_client"]="1"; gpu.Render(1.6);
+        Require(cards[1]->IsClassSet("observed") && !cards[2]->IsClassSet("observed"), "camera highlight follows native viewed-client changes without server roster updates");
+        economy_values["broadcast_player_0_key"]="replacement_0";
+        economy_values["broadcast_player_0_name"]="Replacement"; economy_values["broadcast_player_0_alive"]="1";
+        gpu.Render(1.7);
+
+        Require(cards[0]->IsClassSet("fresh") && cards[0]->GetComputedValues().opacity()==1.f && cards[0]->GetBox().GetSize().y>=63,
+            "a replacement identity resets the previous occupant's death presentation immediately");
+        gpu.Render(1.75); economy_values["broadcast_player_0_alive"]="0"; gpu.Render(1.8); gpu.Render(1.9);
+        Require(cards[0]->GetBox().GetSize().y>34 && cards[0]->GetBox().GetSize().y<66, "death smoothly collapses the existing identity's card");
+        economy_values["cg_rmlCards"]="1"; gpu.Render(2.0); gpu.Render(2.1);
+        Require(cards[1]->GetBox().GetSize().y>34 && cards[1]->GetBox().GetSize().y<66, "compact transition has an intermediate animated state");
+        gpu.Render(2.4); gpu.Render(2.5);
+        Require(cards[1]->GetBox().GetSize().y<40, "compact mode settles to short cards");
+        Check(D3DXSaveSurfaceToFileA(RML_TEST_OUTPUT "/rml-broadcast-compact.png",D3DXIFF_PNG,gpu.surface,nullptr,nullptr),"capture compact match HUD");
+        economy_values["cg_rmlCards"]="2";
+        for (int i=0;i<9;++i) gpu.Render(3.0+i*.05);
+
+        Require(cards[1]->GetComputedValues().opacity()<0.01f && doc->QuerySelector(".match-score")->IsVisible(), "hidden cards settle to zero opacity while the score bar stays visible");
+        Check(D3DXSaveSurfaceToFileA(RML_TEST_OUTPUT "/rml-broadcast-hidden.png",D3DXIFF_PNG,gpu.surface,nullptr,nullptr),"capture hidden cards with score bar retained");
+        Require(RmlHost_Reload(), "reload passive HUD without opening a menu"); gpu.Render(3.5);
+        doc=Rml::GetContext("cod4x-broadcast")->GetDocument(0);
+        Require(!RmlHost_Visible(), "passive reload never acquires menu input");
+        const auto hud_pixels=gpu.Pixels();
+        Require(Near(hud_pixels[60*1920+721],103,181,209), "top score bar remains rendered after card hiding and reload");
+        for (const auto size : {Rml::Vector2i(1024,768),Rml::Vector2i(3440,1440)}) {
+            gpu.Target(size.x,size.y); gpu.Render(3.6);
+            auto* bar=doc->QuerySelector(".match-score");
+            const auto offset=bar->GetAbsoluteOffset(Rml::BoxArea::Border), dimensions=bar->GetBox().GetSize(Rml::BoxArea::Border);
+            const float density=Rml::GetContext("cod4x-broadcast")->GetDensityIndependentPixelRatio();
+            Require(offset.x>=0 && offset.x+dimensions.x<=size.x+1 && offset.y<30*density, "match bar stays at the viewport top on 4:3 and ultrawide");
+            Rml::ElementList live_cards; doc->QuerySelectorAll(live_cards,".player-card");
+            auto* last=live_cards[4]; const float edge=last->GetAbsoluteOffset(Rml::BoxArea::Border).y+last->GetBox().GetSize(Rml::BoxArea::Border).y;
+            Require(edge<=size.y+1 && edge>size.y-60*density, "team cards stay anchored to the viewport bottom");
+        }
+        economy_values["broadcast_mode"]="player"; gpu.Render(4.0);
+        Require(!doc->QuerySelector(".roster")->IsVisible(), "ordinary player mode has no private observer roster");
+        const auto requests=economy_requests.size(); RmlHost_Key('1',1,0); RmlHost_Key('1',0,0);
+        Require(economy_requests.size()==requests && !RmlHost_Visible(), "passive HUD never routes gameplay keys to menu actions");
+        Require(warnings==0,"broadcast has no stylesheet or data diagnostics");
+        RmlHost_EnableBroadcast(0); Require(!RmlHost_Record(1920,1080,5.0),"disabled HUD stops recording");
+        RmlHost_Shutdown(); std::puts("RML_BROADCAST_CHECKS_PASSED"); return 0;
+    }
     if (argc > 1 && std::strcmp(argv[1], "--economy") == 0) {
         fixture = false;
         const char* mod = std::getenv("COD4X_RML_TEST_MOD_SOURCE");
@@ -220,6 +298,10 @@ int main(int argc, char** argv) {
         RmlHost_Key(RML_KEY_MOUSE2,1,0); RmlHost_Key(RML_KEY_MOUSE2,0,0); gpu.Render(10.91);
         Require(!preview_doc->GetElementById("armor-charge-one")->IsClassSet("filled") && economy_requests.empty(),
             "right-click refunds owned armor even when the purchase control is disabled");
+        RmlHost_Key('2',1,0); RmlHost_Key('2',0,0); gpu.Render(10.95);
+        RmlHost_Key('q',1,0); RmlHost_Key('q',0,0); gpu.Render(10.96);
+        Require(preview_doc->GetElementById("primary-drawer")->IsVisible(), "class changes keep the shared weapon picker usable");
+        RmlHost_Key(RML_KEY_ESCAPE,1,0); RmlHost_Key(RML_KEY_ESCAPE,0,0); gpu.Render(10.97);
         Require(RmlHost_ActionAllowed("buy_armor") && RmlHost_ActionAllowed("give:player_123_4") &&
             !RmlHost_ActionAllowed("buy_armor;quit") && !RmlHost_ActionAllowed("pick_primary:8") &&
             !RmlHost_ActionAllowed("give:player_1_2\""), "economy response allowlist rejects command syntax and invalid rows");

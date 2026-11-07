@@ -7,6 +7,9 @@
 #include "toggle.hpp"
 #include "modal.hpp"
 #include "economy.hpp"
+#include "ui_audio.hpp"
+#include "broadcast.hpp"
+#include "player_name.hpp"
 #include "native_keys.h"
 #include <RmlUi/Core.h>
 #include <algorithm>
@@ -22,8 +25,10 @@ double now = 0;
 Source source;
 Source mod_source;
 EconomyView economy;
+BroadcastView broadcast;
+bool broadcast_enabled=false, broadcast_ready=false;
 bool economy_screen = false, economy_preview = false;
-bool economy_fonts_loaded = false;
+bool game_fonts_loaded = false;
 uint32_t source_reloads = 0, source_failures = 0;
 
 class System final : public Rml::SystemInterface {
@@ -96,8 +101,7 @@ bool pressed_buttons[5] = {};
 int activations = 0;
 bool toggle_demo = false;
 Rml::String status = "Select a control to check focus and local audio.";
-Rml::String focused_control;
-double last_hover = -1;
+UiAudio palette_audio;
 std::mutex frames_mutex;
 std::map<uint32_t, std::shared_ptr<const Frame>> frames;
 uint32_t next_ticket = 1, recorded_frames = 0;
@@ -126,11 +130,7 @@ public:
         if (!control || control->HasAttribute("disabled")) return;
         const auto& type = event.GetType();
         if (type == "mouseover" || type == "focus") {
-            const auto id = control->GetId();
-            if (id != focused_control) {
-                focused_control = id;
-                if (now - last_hover >= 0.075) { if (host.play_sound) host.play_sound("mouse_over"); last_hover = now; }
-            }
+            palette_audio.Hover(control->GetId(), true, host, now);
             return;
         }
         if (type != "click") return;
@@ -192,6 +192,18 @@ Rml::Input::KeyIdentifier TranslateKey(int key) {
 
 using namespace cod4x::rml;
 
+namespace {
+bool LoadGameFonts() {
+    if (game_fonts_loaded) return true;
+    if (!Rml::LoadFontFace("ui/rml/fonts/SairaCondensed-Regular.ttf") ||
+        !Rml::LoadFontFace("ui/rml/fonts/SairaCondensed-SemiBold.ttf", false, Rml::Style::FontWeight::Bold) ||
+        !Rml::LoadFontFace("ui/rml/fonts/ShareTechMono-Regular.ttf")) return false;
+    game_fonts_loaded=true; return true;
+}
+}
+extern "C" void RmlHost_EnableBroadcast(int enabled) { broadcast_enabled=enabled!=0; if (!enabled) broadcast_ready=false; }
+extern "C" int RmlHost_BroadcastReady() { return broadcast_ready; }
+
 extern "C" int RmlHost_Init(const rml_host_t* services) {
     if (initialized) return 1;
     if (!services || !services->read_file || !services->free_file) return 0;
@@ -203,6 +215,7 @@ extern "C" int RmlHost_Init(const rml_host_t* services) {
     RegisterDecryptText();
     RegisterToggle();
     RegisterModal();
+    RegisterPlayerName();
     initialized = true;
     context = Rml::CreateContext("cod4x", {1280, 800});
     if (!context) { RmlHost_Shutdown(); return 0; }
@@ -221,11 +234,12 @@ extern "C" void RmlHost_Shutdown() {
     { std::lock_guard<std::mutex> lock(frames_mutex); frames.clear(); }
     renderer.DeviceLost();
     economy.Reset();
+    broadcast.Reset(); broadcast_enabled=broadcast_ready=false;
     Rml::Shutdown();
     context = nullptr; document = nullptr; initialized = false; model = {};
     document_path = "ui/rml/diagnostic.rml"; want_replay = false;
     economy_screen = economy_preview = false;
-    economy_fonts_loaded = false;
+    game_fonts_loaded = false;
 }
 
 extern "C" int RmlHost_Show() {
@@ -237,7 +251,7 @@ extern "C" int RmlHost_Show() {
         if (!document) return 0;
         for (const char* type : {"click", "mouseover", "focus", "mousedown", "keydown", "modalclose"}) document->AddEventListener(type, &events, true);
     }
-    want_close = false; visible = true; focused_control.clear(); last_hover = now;
+    want_close = false; visible = true; palette_audio.Reset(now);
     document->Show();
     ReplayDecryptText(document);
     // Resolve initial styles/layout before recording text and control geometry.
@@ -252,7 +266,7 @@ extern "C" void RmlHost_ClearInput() {
         for (int button = 0; button < 5; ++button) if (pressed_buttons[button]) context->ProcessMouseButtonUp(button, 0);
     }
     pressed_keys.clear(); std::fill(std::begin(pressed_buttons), std::end(pressed_buttons), false);
-    focused_control.clear();
+    palette_audio.Leave();
 }
 extern "C" void RmlHost_Hide() {
     visible = false; want_close = false;
@@ -264,9 +278,11 @@ extern "C" int RmlHost_Visible() { return visible && !want_close; }
 extern "C" int RmlHost_Reload() {
     if (!context) return 0;
     const bool was_visible = visible;
-    RmlHost_Hide();
     Rml::Factory::ClearStyleSheetCache(); Rml::Factory::ClearTemplateCache();
     Rml::ReleaseTextures(&recorder);
+    const bool hud_ok=broadcast.Reload();
+    if (!document && !visible) return hud_ok;
+    RmlHost_Hide();
     auto* replacement = context->LoadDocument(document_path);
     if (!replacement) {
         if (document && was_visible) { visible = true; document->Show(); }
@@ -278,7 +294,8 @@ extern "C" int RmlHost_Reload() {
     }
     document = replacement;
     for (const char* type : {"click", "mouseover", "focus", "mousedown", "keydown", "modalclose"}) document->AddEventListener(type, &events, true);
-    return was_visible ? RmlHost_Show() : 1;
+    const bool menu_ok=was_visible ? RmlHost_Show()!=0 : true;
+    return menu_ok && hud_ok;
 }
 
 extern "C" int RmlHost_Open(rml_screen_t screen) {
@@ -288,12 +305,7 @@ extern "C" int RmlHost_Open(rml_screen_t screen) {
     else if (screen == RML_SCREEN_PALETTE) path = "ui/rml/palette.rml";
     else if (screen == RML_SCREEN_ECONOMY || screen == RML_SCREEN_ECONOMY_PREVIEW) path = "ui/rml/economy.rml";
     else return 0;
-    if ((screen == RML_SCREEN_ECONOMY || screen == RML_SCREEN_ECONOMY_PREVIEW) && !economy_fonts_loaded) {
-        if (!Rml::LoadFontFace("ui/rml/fonts/SairaCondensed-Regular.ttf") ||
-            !Rml::LoadFontFace("ui/rml/fonts/SairaCondensed-SemiBold.ttf", false, Rml::Style::FontWeight::Bold) ||
-            !Rml::LoadFontFace("ui/rml/fonts/ShareTechMono-Regular.ttf")) return 0;
-        economy_fonts_loaded = true;
-    }
+    if ((screen == RML_SCREEN_ECONOMY || screen == RML_SCREEN_ECONOMY_PREVIEW) && !LoadGameFonts()) return 0;
     const bool previous_economy = economy_screen, previous_preview = economy_preview;
     economy_screen = screen == RML_SCREEN_ECONOMY || screen == RML_SCREEN_ECONOMY_PREVIEW;
     economy_preview = screen == RML_SCREEN_ECONOMY_PREVIEW;
@@ -320,7 +332,7 @@ extern "C" int RmlHost_ActionAllowed(const char* response) { return EconomyActio
 extern "C" void RmlHost_MouseMove(int x, int y) {
     if (!RmlHost_Visible()) return;
     context->ProcessMouseMove(x, y, 0);
-    if (!Control(context->GetHoverElement())) focused_control.clear();
+    if (!Control(context->GetHoverElement())) palette_audio.Leave();
 }
 extern "C" void RmlHost_Text(uint32_t value) {
     if (RmlHost_Visible() && value >= 32 && value <= 0x10ffff && !(value >= 0xd800 && value <= 0xdfff)) context->ProcessTextInput(Rml::Character(value));
@@ -352,8 +364,8 @@ extern "C" void RmlHost_Key(int key, int down, int modifiers) {
 }
 
 extern "C" uint32_t RmlHost_Record(int width, int height, double seconds) {
-    if (want_close) { RmlHost_Hide(); return 0; }
-    if (!visible || !context || width <= 0 || height <= 0 || width > 8192 || height > 8192) return 0;
+    if (want_close) RmlHost_Hide();
+    if ((!visible && !broadcast_enabled) || !context || width <= 0 || height <= 0 || width > 8192 || height > 8192) return 0;
     now = std::max(now, seconds);
     const bool source_changed = source.Changed(now);
     const bool mod_changed = mod_source.Changed(now);
@@ -361,18 +373,25 @@ extern "C" uint32_t RmlHost_Record(int width, int height, double seconds) {
         if (RmlHost_Reload()) { ++source_reloads; if (host.log) host.log("source reloaded"); }
         else { ++source_failures; if (host.log) host.log("source reload failed; previous document retained"); }
     }
-    if (economy_screen) economy.Update(host, economy_preview, now);
-    const float density = economy_screen ? std::max(0.25f, std::min(width / 1920.f, height / 1080.f)) :
-        std::max(0.5f, std::min(width / 1280.f, height / 800.f));
-    const bool resized = context->GetDimensions() != Rml::Vector2i(width, height) ||
-        context->GetDensityIndependentPixelRatio() != density;
-    context->SetDimensions({width, height});
-    context->SetDensityIndependentPixelRatio(density);
-    if (want_replay && document) { document->SetClass("playing", false); context->Update(); document->SetClass("playing", true); ReplayDecryptText(document); want_replay = false; }
-    context->Update();
-    if (resized) context->Update();
-    if (economy_screen && economy.ResolveFocus()) context->Update();
-    recorder.Begin(width, height); context->Render(); auto frame = recorder.End();
+    broadcast_ready=broadcast_enabled && LoadGameFonts() && broadcast.Prepare(host,width,height,now);
+    if (!visible && !broadcast_ready) return 0;
+    if (visible && economy_screen) economy.Update(host, economy_preview, now);
+    if (visible) {
+        const float density = economy_screen ? std::max(0.25f, std::min(width / 1920.f, height / 1080.f)) :
+            std::max(0.5f, std::min(width / 1280.f, height / 800.f));
+        const bool resized = context->GetDimensions() != Rml::Vector2i(width, height) ||
+            context->GetDensityIndependentPixelRatio() != density;
+        context->SetDimensions({width, height});
+        context->SetDensityIndependentPixelRatio(density);
+        if (want_replay && document) { document->SetClass("playing", false); context->Update(); document->SetClass("playing", true); ReplayDecryptText(document); want_replay = false; }
+        context->Update();
+        if (resized) context->Update();
+        if (economy_screen && economy.ResolveFocus()) context->Update();
+    }
+    recorder.Begin(width, height);
+    if (broadcast_ready) broadcast.Render();
+    if (visible) context->Render();
+    auto frame = recorder.End();
     std::lock_guard<std::mutex> lock(frames_mutex);
     // A discarded native command queue cannot retain an unbounded number of frames.
     if (frames.size() >= 3) frames.erase(frames.begin());

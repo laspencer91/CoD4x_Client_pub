@@ -42,6 +42,8 @@ void RmlHost_Key(int key, int down, int modifiers);
 void RmlHost_Text(uint32_t codepoint);
 void RmlHost_FocusLost(void);
 void RmlHost_ClearInput(void);
+void RmlHost_EnableBroadcast(int enabled);
+int RmlHost_BroadcastReady(void);
 uint32_t RmlHost_Record(int width, int height, double seconds);
 void RmlHost_Discard(uint32_t ticket);
 int32_t RmlHost_Render(void *device, uint32_t ticket);

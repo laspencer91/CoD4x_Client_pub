@@ -152,3 +152,7 @@ The presentation keeps the original game cursor, grey gradient cards, amber sele
 The full client builds and all six CTests pass. The economy check verifies viewport containment and authored aspect ratio at 1920x1080, 1024x768 and 3440x1440, Deploy visibility at 1280x800, eligible armor dispatch, closed-buy rejection, keyboard/card behavior and density restoration. Informational font loads are excluded from test warning counts; parse/style/model diagnostics still fail the clean-document checks. See the mod's `docs/evidence/2026-11-06-strikepoint.md` for captures and scope.
 
 Reusable controls, styling ownership and preview behavior: [component guide](rml-components.md).
+
+## Match HUD follow-up
+
+The shared passive S&D score/round HUD and spectator cards are now implemented. See [component contracts and controls](rml-components.md#passive-hud-and-component-unification-2026-11-07) and the sibling mod's `docs/broadcast-ui.md`. The current suite contains seven CTests. The native adapter keeps HUD input separate from menus, retains presentation on focus loss and only suppresses native HUD after a replacement frame is queued.

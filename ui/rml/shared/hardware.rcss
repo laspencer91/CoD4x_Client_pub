@@ -54,3 +54,19 @@ ui-toggle input.toggle-hit:hover ~ .toggle-track, ui-toggle input.toggle-hit:foc
 .hardware-ui .charge-segment { box-sizing: border-box; width: 48%; height: 8dp; margin-right: 4%; border: 1dp #5bb4ec40; background-color: #5bb4ec18; decorator: image(../images/panel-gradient.tga); }
 .hardware-ui .charge-segment:last-child { margin-right: 0; }
 .hardware-ui .charge-segment.filled { border-color: #5bb4ecb0; background-color: #5bb4ec99; }
+
+/* Shared game typography and semantic colors; palette samples opt in separately. */
+.game-ui {
+    font-family: Saira Condensed; font-size: 18dp; color: #eef2ec;
+    --ink: #eef2ec; --muted: #8b918a; --rule: #ffffff24;
+    --accent: #d9ba70; --selection: #d9ba70; --positive: #a7c48b; --danger: #db8279;
+    --team-allies: #67b5d1; --team-axis: #d45a59;
+    --team-allies-soft: #67b5d170; --team-axis-soft: #d45a5970;
+    --team-allies-fill: #67b5d120; --team-axis-fill: #d45a5920;
+}
+.canvas-1080 {
+    position: absolute; left: 50%; top: 50%; width: 1920dp; height: 1080dp;
+    margin-left: -960dp; margin-top: -540dp;
+}
+
+.viewport-fill { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }

@@ -15,6 +15,9 @@
 #include "stringed_public.h"
 
 #include <stdbool.h>
+#ifdef COD4X_RMLUI
+#include "cl_rml.h"
+#endif
 
 cvar_t* debug_show_viewpos;
 cvar_t* cg_zoom_sensitivity_ratio;
@@ -936,6 +939,13 @@ qboolean __cdecl CG_DrawFollow(int localClientNum)
 	{
 		return qfalse;
 	}
+#ifdef COD4X_RMLUI
+	/* The spectator HUD shows the followed player at the bottom centre; this text would cover its score bar. */
+	if ( CL_Rml_FollowDrawn() )
+	{
+		return qtrue;
+	}
+#endif
 
 	hastag = CG_GetClientClantag(cg.nextSnap->ps.clientNum, clantag, sizeof(clantag));
 	hasname = CG_GetClientName(cg.nextSnap->ps.clientNum, string, sizeof(string));

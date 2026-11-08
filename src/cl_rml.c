@@ -27,6 +27,7 @@ static int rml_retry_at;
 static qboolean rml_open_pending, rml_first_frame_pending;
 static int rml_buy_key_at, rml_local_open_at;
 static int rml_scores_server_id = -1; /* map load (cl.serverId) whose team scores were last requested */
+static qboolean rml_follow_drawn;
 static Material *rml_cursor;
 static int rml_cursor_x, rml_cursor_y;
 #ifdef COD4X_TEST_ISOLATION
@@ -124,9 +125,10 @@ static int CL_Rml_EnsureHost(void)
     return RmlHost_Init(&host);
 }
 static void CL_Rml_Cards_f(void) { Cvar_SetInt(rml_cards,(rml_cards->integer+1)%3); }
+int CL_Rml_FollowDrawn(void) { return rml_follow_drawn; }
 void CL_Rml_Disconnect(void)
 {
-    CL_Rml_Hide(); RmlHost_EnableBroadcast(0);
+    CL_Rml_Hide(); RmlHost_EnableBroadcast(0); rml_follow_drawn = qfalse;
     Cvar_SetStringByName("ui_rml_hud","0"); Cvar_SetStringByName("ui_rml_broadcast_drawn","0");
     rml_scores_server_id = -1;
     /* Server-published state that gates the local open and the HUD must not carry over to the next server. */
@@ -370,7 +372,7 @@ void CL_Rml_Frame(void)
         RmlHost_EnableBroadcast(draw_hud);
     }
     if (!rml_enabled || !rml_enabled->boolean || (!RmlHost_Visible() && !Cvar_GetInt("ui_rml_hud"))) {
-        Cvar_SetStringByName("ui_rml_broadcast_drawn","0");
+        Cvar_SetStringByName("ui_rml_broadcast_drawn","0"); rml_follow_drawn = qfalse;
         if (rml_captured) CL_Rml_Hide();
         return;
     }
@@ -381,6 +383,7 @@ void CL_Rml_Frame(void)
         if (Cvar_GetInt("developer")) Com_Printf(CON_CHANNEL_UI, "RmlUi: first frame %d ms after the buy key\n", Sys_Milliseconds() - rml_buy_key_at);
     }
     Cvar_SetStringByName("ui_rml_broadcast_drawn",queued && RmlHost_BroadcastReady() ? "1" : "0");
+    rml_follow_drawn = queued && RmlHost_BroadcastFollowShown();
     if (ticket && !queued) RmlHost_Discard(ticket);
     if (ticket && RmlHost_Visible() && IN_AppActive() && !(clientUIActives.keyCatchers & KEYCATCH_CONSOLE) && rml_cursor && !Material_IsDefault(rml_cursor)) {
         const float size = 32.0f * _vidConfig.displayHeight / 480.0f;

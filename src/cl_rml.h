@@ -16,4 +16,6 @@ struct menuDef_t;
 void CL_Rml_MenuOpened(struct menuDef_t *menu);
 void CL_Rml_MenuClosing(struct menuDef_t *menu);
 void CL_Rml_OpenScriptMenu_f(void);
+/* The passive HUD drew the followed player this frame, so the engine's follow text is redundant. */
+int CL_Rml_FollowDrawn(void);
 #endif

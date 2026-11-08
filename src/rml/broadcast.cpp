@@ -6,7 +6,7 @@
 
 namespace cod4x::rml {
 namespace {
-constexpr int kStackBase=36, kCardGap=4, kHeaderGap=3;
+constexpr int kCardGap=4, kHeaderGap=3;
 // Faction colours are dark scoreboard banner tints; lift them toward white for text over the scene.
 Rml::String LiftColor(const Rml::String& hex) {
     const unsigned long rgb=std::strtoul(hex.c_str()+1,nullptr,16);
@@ -26,7 +26,7 @@ Rml::String TeamStyle(const Rml::String& allies, const Rml::String& axis) {
 }
 }
 void BroadcastView::Reset() {
-    context=nullptr; document=nullptr; model={}; players.clear(); values.Clear(); retry_at=0;
+    context=nullptr; document=nullptr; model={}; players.clear(); follow={}; values.Clear(); retry_at=0;
     observer=compact=hidden=planted=armor_visible=false; armor_charges=0; last_visible_mode=CardMode::Expanded;
     team_factions.clear(); team_style.clear();
 }
@@ -36,20 +36,21 @@ bool BroadcastView::Reload() {
     if (!next) return false;
     if (document) document->Close();
     document=next; document->Show(); MeasureCards();
-    if (model) model.DirtyAllVariables(); // card heights may have changed with the stylesheet
+    if (model) model.DirtyAllVariables(); // row heights may have changed with the stylesheet
     return true;
 }
-// Probes the stylesheet's card heights so stacking never hard-codes them.
+// Probes the stylesheet's row and header heights so stacking never hard-codes them.
 void BroadcastView::MeasureCards() {
     auto* stage=document->QuerySelector(".broadcast-stage"); if (!stage) return;
-    float* targets[]={&expanded_height,&condensed_height};
-    Rml::Element* probes[2]={};
-    for (int i=0;i<2;++i) {
-        auto probe=document->CreateElement("div"); probe->SetClassNames(i ? "player-card condensed" : "player-card");
+    float* targets[]={&expanded_height,&condensed_height,&dead_height,&header_height};
+    const char* classes[]={"player-card","player-card condensed","player-card dead","roster-heading"};
+    Rml::Element* probes[4]={};
+    for (int i=0;i<4;++i) {
+        auto probe=document->CreateElement("div"); probe->SetClassNames(classes[i]);
         probe->SetProperty("display","none"); probes[i]=stage->AppendChild(std::move(probe));
     }
     context->Update();
-    for (int i=0;i<2;++i) {
+    for (int i=0;i<4;++i) {
         const auto* height=probes[i]->GetProperty(Rml::PropertyId::Height);
         if (height && height->unit==Rml::Unit::DP) *targets[i]=height->Get<float>();
         else if (height && height->unit==Rml::Unit::PX) *targets[i]=height->Get<float>()/context->GetDensityIndependentPixelRatio();
@@ -64,18 +65,17 @@ bool BroadcastView::Prepare(const rml_host_t& host, int width, int height, doubl
         auto binding=context->CreateDataModel("broadcast");
         auto row=binding.RegisterStruct<BroadcastPlayer>();
 #define ROW(field) row.RegisterMember(#field,&BroadcastPlayer::field)
-        ROW(key); ROW(name); ROW(health); ROW(slot); ROW(weapon); ROW(utility); ROW(fill); ROW(bottom);
+        ROW(key); ROW(name); ROW(health); ROW(slot); ROW(weapon); ROW(utility); ROW(fill); ROW(top);
         ROW(present); ROW(condensed); ROW(fresh); ROW(axis); ROW(alive); ROW(observed); ROW(frag);
 #undef ROW
         binding.RegisterArray<std::vector<BroadcastPlayer>>();
 #define BIND(field) binding.Bind(#field,&field)
-        BIND(players); BIND(left_score); BIND(right_score); BIND(clock); BIND(round);
+        BIND(players); BIND(follow); BIND(left_score); BIND(right_score); BIND(clock); BIND(round);
         BIND(left_alive); BIND(right_alive); BIND(observer); BIND(relative); BIND(team_style); BIND(compact); BIND(hidden); BIND(planted);
         BIND(armor_visible); BIND(armor_charges);
-        BIND(name_color8); BIND(name_color9); BIND(left_header_bottom); BIND(right_header_bottom);
+        BIND(name_color8); BIND(name_color9); BIND(header_top);
 #undef BIND
-        players.resize(10); left_header_bottom=right_header_bottom="0dp";
-        for (auto& row : players) { row.fill="0%"; row.bottom="0dp"; }
+        players.resize(10); header_top="0dp";
         model=binding.GetModelHandle();
     }
     if (!document && seconds<retry_at) return false;
@@ -103,11 +103,11 @@ bool BroadcastView::Prepare(const rml_host_t& host, int width, int height, doubl
     armor_charges=std::max(0,std::min(number("economy_armor_charges"),2));
     armor_visible=!observer && number("economy_armor_capacity")>0 && armor_charges>0;
     clock=value("rml_seconds_left").empty() ? Rml::String() : FormatClock(std::min(number("rml_seconds_left"),5999),1);
-    const auto follow=value("rml_follow_client");
-    const int followed=follow.empty() ? -1 : std::atoi(follow.c_str());
+    const auto followed_client=value("rml_follow_client");
+    const int followed=followed_client.empty() ? -1 : std::atoi(followed_client.c_str());
     int alive[2]={0,0};
     for (int i=0;i<10;++i) {
-        auto& row=players[i]; const auto old_key=row.key; const bool was_fresh=row.fresh; row={}; row.fill="0%"; row.bottom="0dp";
+        auto& row=players[i]; const auto old_key=row.key; const bool was_fresh=row.fresh; row={};
         if (!observer) continue;
         // shoutcast.gsc sendSlot(): name, health (0..1), client number, weapon, utility and frag per slot.
         const auto slot=std::to_string(i), name=value("shout_name"+slot), client=value("shout_client"+slot);
@@ -120,20 +120,27 @@ bool BroadcastView::Prepare(const rml_host_t& host, int width, int height, doubl
         row.observed=followed>=0 && std::atoi(client.c_str())==followed;
         row.health=std::to_string(health); row.slot=std::to_string(i==9 ? 0 : i+1);
         row.fill=std::to_string(health)+"%";
-        row.condensed=compact || !row.alive;
+        row.condensed=compact && row.alive;
         row.weapon=ImagePath(value("shout_weapon"+slot));
         row.utility=UtilityImage(value("shout_utility"+slot));
         row.frag=number("shout_frag"+slot)!=0;
     }
     left_alive=std::to_string(alive[0]); right_alive=std::to_string(alive[1]); // observers: allies left
+    // Both headers sit where a full stack of five living players would be centred on the screen's middle (the
+    // roster's origin); rows hang below them, so deaths collapse rows without moving the headers.
+    const float live_height=compact ? condensed_height : expanded_height;
+    const int stack_top=-int(std::lround((header_height+kHeaderGap+5*live_height+4*kCardGap)/2));
+    header_top=std::to_string(stack_top)+"dp";
     for (int team=0;team<2;++team) {
-        int bottom=kStackBase;
-        for (int slot=4;slot>=0;--slot) {
+        int top=stack_top+int(std::lround(header_height))+kHeaderGap;
+        for (int slot=0;slot<5;++slot) {
             auto& row=players[team*5+slot]; if (!row.present) continue;
-            row.bottom=std::to_string(bottom)+"dp"; bottom+=int(std::lround(row.condensed ? condensed_height : expanded_height))+kCardGap;
+            row.top=std::to_string(top)+"dp"; top+=int(std::lround(row.alive ? live_height : dead_height))+kCardGap;
         }
-        (team==0 ? left_header_bottom : right_header_bottom)=std::to_string(bottom+kHeaderGap)+"dp";
     }
+    // The followed player's plate; Promod sends roster slots only to spectators.
+    follow={};
+    for (const auto& row : players) if (row.present && row.observed) { follow=row; break; }
     if (before_compact!=compact || before_hidden!=hidden) model.DirtyAllVariables();
     UpdateStage(context,FitStage(context,width,height,1920.f,1080.f,.25f)); return true;
 }

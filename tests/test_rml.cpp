@@ -185,17 +185,27 @@ int main(int argc, char** argv) {
         Check(D3DXSaveSurfaceToFileA(RML_TEST_OUTPUT "/rml-broadcast-expanded.png",D3DXIFF_PNG,gpu.surface,nullptr,nullptr),"capture expanded match HUD");
         economy_values["rml_follow_client"]="1"; gpu.Render(1.6);
         Require(cards[1]->IsClassSet("observed") && !cards[2]->IsClassSet("observed"), "camera highlight follows native viewed-client changes without server roster updates");
+        {
+            auto* plate=doc->QuerySelector(".follow-plate");
+            Require(plate && plate->IsVisible() && RmlHost_BroadcastFollowShown() &&
+                plate->QuerySelector("player-name")->GetAttribute<Rml::String>("text","")=="^5Cooper", "the bottom plate shows the followed player");
+            const auto card=cards[5]->GetAbsoluteOffset(Rml::BoxArea::Border);
+            const float density=Rml::GetContext("cod4x-broadcast")->GetDensityIndependentPixelRatio();
+            Require(cards[0]->GetAbsoluteOffset(Rml::BoxArea::Border).x<1 && card.x+cards[5]->GetBox().GetSize(Rml::BoxArea::Border).x>1919 &&
+                cards[5]->QuerySelector(".portrait-placeholder")->GetAbsoluteOffset(Rml::BoxArea::Border).x>card.x+300*density,
+                "team rows sit against the screen edges and the axis side is mirrored");
+        }
         economy_values["shout_name0"]="Replacement"; economy_values["shout_health0"]="1";
         gpu.Render(1.7);
 
-        Require(cards[0]->IsClassSet("fresh") && cards[0]->GetComputedValues().opacity()==1.f && cards[0]->GetBox().GetSize().y>=63,
+        Require(cards[0]->IsClassSet("fresh") && cards[0]->GetComputedValues().opacity()==1.f && cards[0]->GetBox().GetSize().y>=40,
             "a replacement identity resets the previous occupant's death presentation immediately");
         gpu.Render(1.75); economy_values["shout_health0"]="0"; gpu.Render(1.8); gpu.Render(1.9);
-        Require(cards[0]->GetBox().GetSize().y>34 && cards[0]->GetBox().GetSize().y<66, "death smoothly collapses the existing identity's card");
+        Require(cards[0]->GetBox().GetSize().y>30 && cards[0]->GetBox().GetSize().y<42, "death smoothly collapses the existing identity's card");
         economy_values["cg_rmlCards"]="1"; gpu.Render(2.0); gpu.Render(2.1);
-        Require(cards[1]->GetBox().GetSize().y>34 && cards[1]->GetBox().GetSize().y<66, "compact transition has an intermediate animated state");
+        Require(cards[1]->GetBox().GetSize().y>34 && cards[1]->GetBox().GetSize().y<42, "compact transition has an intermediate animated state");
         gpu.Render(2.4); gpu.Render(2.5);
-        Require(cards[1]->GetBox().GetSize().y<40, "compact mode settles to short cards");
+        Require(cards[1]->GetBox().GetSize().y<35, "compact mode settles to short cards");
         Check(D3DXSaveSurfaceToFileA(RML_TEST_OUTPUT "/rml-broadcast-compact.png",D3DXIFF_PNG,gpu.surface,nullptr,nullptr),"capture compact match HUD");
         economy_values["cg_rmlCards"]="2";
         for (int i=0;i<9;++i) gpu.Render(3.0+i*.05);
@@ -215,9 +225,8 @@ int main(int argc, char** argv) {
             const auto offset=bar->GetAbsoluteOffset(Rml::BoxArea::Border), dimensions=bar->GetBox().GetSize(Rml::BoxArea::Border);
             const float density=Rml::GetContext("cod4x-broadcast")->GetDensityIndependentPixelRatio();
             Require(offset.x>=0 && offset.x+dimensions.x<=size.x+1 && offset.y<30*density, "match bar stays at the viewport top on 4:3 and ultrawide");
-            Rml::ElementList live_cards; doc->QuerySelectorAll(live_cards,".player-card");
-            auto* last=live_cards[4]; const float edge=last->GetAbsoluteOffset(Rml::BoxArea::Border).y+last->GetBox().GetSize(Rml::BoxArea::Border).y;
-            Require(edge<=size.y+1 && edge>size.y-60*density, "team cards stay anchored to the viewport bottom");
+            const float header=doc->QuerySelector(".roster-heading.allies")->GetAbsoluteOffset(Rml::BoxArea::Border).y;
+            Require(header<size.y*.5f-80*density && header>size.y*.5f-200*density, "team stacks stay centred on the viewport's middle");
         }
         economy_values["rml_team_color_allies"]="#99a3b0"; economy_values["rml_team_color_axis"]="#a69169"; gpu.Render(3.9); gpu.Render(3.95);
         {
@@ -225,6 +234,7 @@ int main(int argc, char** argv) {
             Require(faction.red==188 && faction.green==195 && faction.blue==203, "observer scores use the scoreboard's faction colours");
         }
         economy_values["rml_local_team"]="axis"; gpu.Render(4.0);
+        Require(!RmlHost_BroadcastFollowShown(), "players never get the observer's followed-player plate");
         {
             gpu.Target(1920,1080); gpu.Render(4.05);
             Rml::ElementList scores; doc->QuerySelectorAll(scores,".score-value");

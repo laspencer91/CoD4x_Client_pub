@@ -217,6 +217,7 @@ bool LoadGameFonts() {
 }
 extern "C" void RmlHost_EnableBroadcast(int enabled) { broadcast_enabled=enabled!=0; if (!enabled) broadcast_ready=false; }
 extern "C" int RmlHost_BroadcastReady() { return broadcast_ready; }
+extern "C" int RmlHost_BroadcastFollowShown() { return broadcast_ready && broadcast.FollowShown(); }
 
 extern "C" int RmlHost_Init(const rml_host_t* services) {
     if (initialized) return 1;

@@ -11,6 +11,8 @@
 #include "ui_audio.hpp"
 #include "broadcast.hpp"
 #include "player_name.hpp"
+#include "lag_graph.hpp"
+#include "avatars.hpp"
 #include "native_keys.h"
 #include <RmlUi/Core.h>
 #include <algorithm>
@@ -52,6 +54,10 @@ public:
         // All UI resources use the same packaged namespace in the game and in native tests.
         if (path.compare(0, 7, "ui/rml/") || path.find("..") != path.npos ||
             path.find('\\') != path.npos || path.find(':') != path.npos || !host.read_file) return 0;
+        if (avatars::IsAvatarPath(path)) { // player images: decoded from a local folder, never the game's file system
+            auto file = std::make_unique<File>();
+            return avatars::Read(path, file->bytes) ? reinterpret_cast<Rml::FileHandle>(file.release()) : 0;
+        }
         if (source.Enabled() || mod_source.Enabled()) {
             auto file = std::make_unique<File>();
             if (!mod_source.Read(path, file->bytes) && !source.Read(path, file->bytes)) return 0;
@@ -257,6 +263,7 @@ extern "C" int RmlHost_Init(const rml_host_t* services) {
     RegisterToggle();
     RegisterModal();
     RegisterPlayerName();
+    RegisterLagGraph();
     initialized = true;
     context = Rml::CreateContext("cod4x", {1280, 800});
     if (!context) { RmlHost_Shutdown(); return 0; }
@@ -277,6 +284,7 @@ extern "C" void RmlHost_Shutdown() {
     renderer.DeviceLost();
     economy.Reset();
     broadcast.Reset(); broadcast_enabled=broadcast_ready=false;
+    avatars::Shutdown();
     Rml::Shutdown();
     context = nullptr; document = nullptr; initialized = false; model = {};
     document_path = "ui/rml/diagnostic.rml"; want_replay = false;
@@ -368,6 +376,7 @@ extern "C" int RmlHost_Open(rml_screen_t screen) {
 
 extern "C" int RmlHost_SetSourceDirectory(const char* directory) { return source.Set(directory); }
 extern "C" int RmlHost_SetModSourceDirectory(const char* directory) { return mod_source.Set(directory); }
+extern "C" void RmlHost_SetAvatarDirectory(const char* directory) { avatars::SetDirectory(directory); }
 extern "C" void RmlHost_EconomyDialog(int confirmation) {
     economy.Dialog(confirmation != 0);
     if (confirmation && context && document && economy_screen) {

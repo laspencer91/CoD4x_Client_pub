@@ -9,6 +9,7 @@
 #include "callbacks.h"
 #include "cl_tickrate.h"
 #include "cl_recoil.h"
+#include "cl_rml.h"
 #ifdef COD4X_VOLUMETRIC_SMOKE
 #include "cl_smoke.h"
 #endif
@@ -1092,6 +1093,7 @@ void Patch_Other(){
 #endif
 #ifdef COD4X_RMLUI
   R_PatchDeviceReset();
+  CL_Rml_Patch();
 #endif
 
 

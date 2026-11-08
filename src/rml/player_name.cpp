@@ -1,4 +1,5 @@
 #include "player_name.hpp"
+#include "view_support.hpp"
 #include <RmlUi/Core.h>
 #include <cstdio>
 
@@ -32,7 +33,7 @@ protected:
             span->AppendChild(std::move(text)); AppendChild(std::move(span)); run.clear();
         };
         for (size_t i=0; i<value.size(); ++i) {
-            if (value[i]=='^' && i+1<value.size() && value[i+1]>='0' && value[i+1]<='@') {
+            if (IsColorEscape(value,i)) {
                 flush(); const unsigned index = unsigned(value[++i]-'0');
                 if (index==8) color=eight;
                 else if (index==9) color=nine;

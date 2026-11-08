@@ -18,4 +18,10 @@ void CL_Rml_MenuClosing(struct menuDef_t *menu);
 void CL_Rml_OpenScriptMenu_f(void);
 /* The passive HUD drew the followed player this frame, so the engine's follow text is redundant. */
 int CL_Rml_FollowDrawn(void);
+/* Stock readouts the match HUD draws in its style: CL_Rml_Patch points the FPS readout's line prints and the lagometer
+ * call at cl_rml_stock.asm (startup, code writable); Begin and End wrap each frame's upper-right debug info so the HUD
+ * can show the FPS lines instead. */
+void CL_Rml_Patch(void);
+void CL_Rml_CornerBegin(void);
+void CL_Rml_CornerEnd(void);
 #endif

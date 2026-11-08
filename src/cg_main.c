@@ -31,10 +31,16 @@ void __cdecl CG_DrawUpperRightDebugInfo()
   {
     yoffset = CG_DrawViewpos(&scrPlaceFull, yoffset);
   }
+#ifdef COD4X_RMLUI
+  CL_Rml_CornerBegin(); /* while the HUD is drawn it shows the FPS readout in its own style */
+#endif
   if ( cg_drawFPS->boolean )
   {
     yoffset = CG_DrawFPSDebugInfo(yoffset);
   }
+#ifdef COD4X_RMLUI
+  CL_Rml_CornerEnd();
+#endif
   if ( cg_drawSnapshot->boolean && cg.snap != NULL)
   {
     yoffset = CG_DrawSnapshotDebugInfo(yoffset);

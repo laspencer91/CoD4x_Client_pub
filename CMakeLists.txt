@@ -99,7 +99,7 @@ add_library(cod4x SHARED
 )
 
 if(RMLUI)
-    target_sources(cod4x PRIVATE src/cl_rml.c)
+    target_sources(cod4x PRIVATE src/cl_rml.c src/cl_rml_stock.asm)
     target_compile_definitions(cod4x PRIVATE COD4X_RMLUI=1)
     target_link_libraries(cod4x PRIVATE cod4x_rml)
 endif()

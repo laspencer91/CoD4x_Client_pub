@@ -1,18 +1,30 @@
 #include "broadcast.hpp"
+#include "avatars.hpp"
 #include <algorithm>
 #include <cmath>
+#include <sstream>
 #include <cstdio>
 #include <cstdlib>
 
 namespace cod4x::rml {
 namespace {
-constexpr int kCardGap=4, kHeaderGap=3;
+constexpr int kCardGap=4;
 // Faction colours are dark scoreboard banner tints; lift them toward white for text over the scene.
 Rml::String LiftColor(const Rml::String& hex) {
     const unsigned long rgb=std::strtoul(hex.c_str()+1,nullptr,16);
     int c[3]={int(rgb>>16&255),int(rgb>>8&255),int(rgb&255)};
     for (int& v : c) v+=(255-v)*35/100;
     char out[8]; std::snprintf(out,sizeof(out),"#%02x%02x%02x",c[0],c[1],c[2]); return out;
+}
+// Up to two characters of the name without colour codes or spaces, upper case: a tile without an image.
+Rml::String Initials(const Rml::String& name) {
+    Rml::String out; int characters=0;
+    for (const unsigned char c : StripColors(name)) {
+        if (c==' ') continue;
+        if ((c & 0xC0)!=0x80 && ++characters>2) break; // count UTF-8 lead bytes only
+        out+=char(c>='a' && c<='z' ? c-'a'+'A' : c);
+    }
+    return out;
 }
 // Overrides the stylesheet's --team-* tokens with the scoreboard's faction colours.
 Rml::String TeamStyle(const Rml::String& allies, const Rml::String& axis) {
@@ -39,18 +51,18 @@ bool BroadcastView::Reload() {
     if (model) model.DirtyAllVariables(); // row heights may have changed with the stylesheet
     return true;
 }
-// Probes the stylesheet's row and header heights so stacking never hard-codes them.
+// Probes the stylesheet's row heights so stacking never hard-codes them.
 void BroadcastView::MeasureCards() {
     auto* stage=document->QuerySelector(".broadcast-stage"); if (!stage) return;
-    float* targets[]={&expanded_height,&condensed_height,&dead_height,&header_height};
-    const char* classes[]={"player-card","player-card condensed","player-card dead","roster-heading"};
-    Rml::Element* probes[4]={};
-    for (int i=0;i<4;++i) {
+    float* targets[]={&expanded_height,&condensed_height,&dead_height};
+    const char* classes[]={"player-card","player-card condensed","player-card dead"};
+    Rml::Element* probes[3]={};
+    for (int i=0;i<3;++i) {
         auto probe=document->CreateElement("div"); probe->SetClassNames(classes[i]);
         probe->SetProperty("display","none"); probes[i]=stage->AppendChild(std::move(probe));
     }
     context->Update();
-    for (int i=0;i<4;++i) {
+    for (int i=0;i<3;++i) {
         const auto* height=probes[i]->GetProperty(Rml::PropertyId::Height);
         if (height && height->unit==Rml::Unit::DP) *targets[i]=height->Get<float>();
         else if (height && height->unit==Rml::Unit::PX) *targets[i]=height->Get<float>()/context->GetDensityIndependentPixelRatio();
@@ -65,17 +77,20 @@ bool BroadcastView::Prepare(const rml_host_t& host, int width, int height, doubl
         auto binding=context->CreateDataModel("broadcast");
         auto row=binding.RegisterStruct<BroadcastPlayer>();
 #define ROW(field) row.RegisterMember(#field,&BroadcastPlayer::field)
-        ROW(key); ROW(name); ROW(health); ROW(slot); ROW(weapon); ROW(utility); ROW(fill); ROW(top);
+        ROW(key); ROW(name); ROW(plain); ROW(health); ROW(slot); ROW(weapon); ROW(utility); ROW(initials); ROW(avatar); ROW(ghost); ROW(fill); ROW(top);
         ROW(present); ROW(condensed); ROW(fresh); ROW(axis); ROW(alive); ROW(observed); ROW(frag);
+        ROW(own); ROW(other); ROW(low); ROW(hit);
 #undef ROW
         binding.RegisterArray<std::vector<BroadcastPlayer>>();
+        auto line=binding.RegisterStruct<CornerLine>();
+        line.RegisterMember("text",&CornerLine::text); line.RegisterMember("label",&CornerLine::label); line.RegisterMember("present",&CornerLine::present);
+        binding.RegisterArray<std::vector<CornerLine>>();
 #define BIND(field) binding.Bind(#field,&field)
-        BIND(players); BIND(follow); BIND(left_score); BIND(right_score); BIND(clock); BIND(round);
+        BIND(players); BIND(follow); BIND(corner_lines); BIND(corner_labels); BIND(lag_on); BIND(lag_snc); BIND(lag_frames); BIND(lag_snaps); BIND(lag_delayed); BIND(left_score); BIND(right_score); BIND(clock); BIND(round);
         BIND(left_alive); BIND(right_alive); BIND(observer); BIND(relative); BIND(team_style); BIND(compact); BIND(hidden); BIND(planted);
         BIND(armor_visible); BIND(armor_charges);
-        BIND(name_color8); BIND(name_color9); BIND(header_top);
 #undef BIND
-        players.resize(10); header_top="0dp";
+        players.resize(10); corner_lines.resize(16);
         model=binding.GetModelHandle();
     }
     if (!document && seconds<retry_at) return false;
@@ -84,9 +99,9 @@ bool BroadcastView::Prepare(const rml_host_t& host, int width, int height, doubl
     const auto card_mode=static_cast<CardMode>(std::max(0,std::min(number("cg_rmlCards"),2)));
     if (card_mode!=CardMode::Hidden) last_visible_mode=card_mode;
     compact=last_visible_mode==CardMode::Compact; hidden=card_mode==CardMode::Hidden;
-    // Everything here is already on the client: team, scores and clock from the engine (CL_Rml_Value), the bomb
-    // and round from server info (ui_bomb_timer, ui_round), and the observer roster from Promod's shoutcaster
-    // slots (shout_*N).
+    // Everything here is already on the client: team, scores, clock and every client's name and team from the engine
+    // (CL_Rml_Value), the bomb and round from server info (ui_bomb_timer, ui_round), and the roster from Promod's
+    // shoutcaster slots (shout_*N).
     // Players see their own team on the left in Promod's friendly/enemy colours; observers see Allies/Axis.
     const auto viewer=value("rml_local_team");
     observer=viewer=="spectator";
@@ -98,51 +113,90 @@ bool BroadcastView::Prepare(const rml_host_t& host, int width, int height, doubl
     // Observers use the scoreboard's faction colours; the stylesheet's team tokens remain the fallback.
     const Rml::String allies=observer ? value("rml_team_color_allies") : Rml::String(), axis=observer ? value("rml_team_color_axis") : Rml::String();
     if (allies+axis!=team_factions) { team_factions=allies+axis; team_style=TeamStyle(allies,axis); }
-    planted=number("ui_bomb_timer")!=0; name_color8=value("rml_name_color_8"); name_color9=value("rml_name_color_9");
+    planted=number("ui_bomb_timer")!=0;
     // The local player's body armor (economy mode); the HUD shows one pip per charge of the two-charge vest.
     armor_charges=std::max(0,std::min(number("economy_armor_charges"),2));
     armor_visible=!observer && number("economy_armor_capacity")>0 && armor_charges>0;
     clock=value("rml_seconds_left").empty() ? Rml::String() : FormatClock(std::min(number("rml_seconds_left"),5999),1);
     const auto followed_client=value("rml_follow_client");
     const int followed=followed_client.empty() ? -1 : std::atoi(followed_client.c_str());
+    // Rows. shoutcast.gsc sendSlot() fills slots 0-4 (allies) and 5-9 (axis): every slot for a spectator, only their
+    // own team's for a player. A player's other-team tiles come from the engine's client list and show identity only.
+    // Rows are read untracked; a changed row dirties only the rows.
+    auto raw=[&](const Rml::String& name) { return DvarSnapshot::Fetch(host,name); };
+    std::vector<Rml::String> others;
+    if (relative) { std::istringstream list(raw("rml_other_clients")); for (Rml::String client; others.size()<5 && list>>client;) others.push_back(client); }
+    const auto previous=players; const auto previous_follow=follow; const auto previous_alive=left_alive+"/"+right_alive;
     int alive[2]={0,0};
     for (int i=0;i<10;++i) {
-        auto& row=players[i]; const auto old_key=row.key; const bool was_fresh=row.fresh; row={};
-        if (!observer) continue;
-        // shoutcast.gsc sendSlot(): name, health (0..1), client number, weapon, utility and frag per slot.
-        const auto slot=std::to_string(i), name=value("shout_name"+slot), client=value("shout_client"+slot);
+        auto& row=players[i]; const auto& old=previous[i]; row={};
+        const bool other=relative && (i>=5)!=(viewer=="axis");
+        const auto slot=std::to_string(i);
+        Rml::String name, client;
+        if (other && size_t(i%5)<others.size()) { client=others[i%5]; name=raw("rml_client_name_"+client); }
+        else if (!other && (observer || relative)) { name=raw("shout_name"+slot); client=raw("shout_client"+slot); }
         if (name.empty() || client.empty()) continue;
-        row.present=true; row.key=client+":"+name; row.fresh=old_key!=row.key;
-        if (was_fresh!=row.fresh) model.DirtyVariable("players");
-        row.name=name; row.axis=i>=5;
-        const int health=std::max(0,std::min(int(std::lround(std::atof(value("shout_health"+slot).c_str())*100)),100));
-        row.alive=health>0; alive[row.axis]+=row.alive;
+        row.present=true; row.key=client+":"+name; row.fresh=old.key!=row.key;
+        row.name=name; row.plain=StripColors(name); row.axis=i>=5; row.own=relative && !other; row.other=other;
+        if (relative) { row.initials=Initials(name); row.avatar=!row.fresh && !old.avatar.empty() ? old.avatar : avatars::Source(name,seconds); }
+        if (other) continue;
+        const int health=std::max(0,std::min(int(std::lround(std::atof(raw("shout_health"+slot).c_str())*100)),100));
+        row.alive=health>0; alive[row.axis]+=row.alive; row.low=row.alive && health<=25;
+        row.hit=row.alive && !row.fresh && health<std::atoi(old.health.c_str()); // one frame; the stylesheet fades it out
         row.observed=followed>=0 && std::atoi(client.c_str())==followed;
         row.health=std::to_string(health); row.slot=std::to_string(i==9 ? 0 : i+1);
         row.fill=std::to_string(health)+"%";
         row.condensed=compact && row.alive;
-        row.weapon=ImagePath(value("shout_weapon"+slot));
-        row.utility=UtilityImage(value("shout_utility"+slot));
-        row.frag=number("shout_frag"+slot)!=0;
+        row.weapon=ImagePath(raw("shout_weapon"+slot));
+        row.utility=UtilityImage(raw("shout_utility"+slot));
+        row.frag=std::atoi(raw("shout_frag"+slot).c_str())!=0;
     }
     left_alive=std::to_string(alive[0]); right_alive=std::to_string(alive[1]); // observers: allies left
-    // Both headers sit where a full stack of five living players would be centred on the screen's middle (the
-    // roster's origin); rows hang below them, so deaths collapse rows without moving the headers.
+    // Each stack hangs from the roster's top (under the minimap); deaths collapse rows towards it.
     const float live_height=compact ? condensed_height : expanded_height;
-    const int stack_top=-int(std::lround((header_height+kHeaderGap+5*live_height+4*kCardGap)/2));
-    header_top=std::to_string(stack_top)+"dp";
     for (int team=0;team<2;++team) {
-        int top=stack_top+int(std::lround(header_height))+kHeaderGap;
+        int top=0;
         for (int slot=0;slot<5;++slot) {
             auto& row=players[team*5+slot]; if (!row.present) continue;
             row.top=std::to_string(top)+"dp"; top+=int(std::lround(row.alive ? live_height : dead_height))+kCardGap;
         }
     }
-    // The followed player's plate; Promod sends roster slots only to spectators.
+    // The followed player's plate: anyone an observer follows, or the teammate a dead player follows (only own rows
+    // can be observed for a player).
     follow={};
     for (const auto& row : players) if (row.present && row.observed) { follow=row; break; }
+    if (follow.present && observer) follow.avatar=avatars::Source(follow.name,seconds); // observers' rows skip images
+    follow.ghost=avatars::Ghost(follow.avatar);
+    // The stock FPS readout (Options: FPS Counter) in this HUD's style: the engine's own lines, which it skips drawing
+    // while this HUD is drawn. A fixed 16 rows, as the engine prints at most a handful.
+    const auto previous_corner=corner_lines;
+    const int corner_count=std::max(0,std::min(std::atoi(raw("rml_corner_lines").c_str()),16));
+    for (int i=0;i<16;++i) {
+        const auto n=std::to_string(i);
+        corner_lines[i]=i<corner_count ? CornerLine{raw("rml_corner_text_"+n),raw("rml_corner_label_"+n),true} : CornerLine{};
+    }
+    corner_labels=number("cg_drawFPSLabels")!=0;
+    // The stock lagometer in this HUD's style: the engine's own samples, read only while it is on.
+    const bool lag_was_on=lag_on;
+    lag_on=raw("rml_lagometer_on")=="1";
+    if (lag_on) {
+        auto frames=raw("rml_lagometer_frames"), snaps=raw("rml_lagometer_snaps"), delayed=raw("rml_lagometer_delayed");
+        const bool snc=raw("rml_lagometer_snc")=="1";
+        if (frames!=lag_frames || snaps!=lag_snaps || delayed!=lag_delayed) {
+            lag_frames=std::move(frames); lag_snaps=std::move(snaps); lag_delayed=std::move(delayed);
+            model.DirtyVariable("lag_frames"); model.DirtyVariable("lag_snaps"); model.DirtyVariable("lag_delayed");
+        }
+        if (snc!=lag_snc) { lag_snc=snc; model.DirtyVariable("lag_snc"); }
+    }
+    if (lag_on!=lag_was_on) model.DirtyVariable("lag_on");
+    if (corner_lines!=previous_corner) model.DirtyVariable("corner_lines");
+    if (players!=previous) model.DirtyVariable("players");
+    if (follow!=previous_follow) model.DirtyVariable("follow");
+    if (left_alive+"/"+right_alive!=previous_alive) { model.DirtyVariable("left_alive"); model.DirtyVariable("right_alive"); }
     if (before_compact!=compact || before_hidden!=hidden) model.DirtyAllVariables();
-    UpdateStage(context,FitStage(context,width,height,1920.f,1080.f,.25f)); return true;
+    // Measured against 1440 x 1080 rather than 1920 x 1080: 16:9 and wider keep the 1080p scale, while 4:3 and 5:4
+    // (common in competitive CoD4) scale by height instead of shrinking to fit 1920 dp across. Everything fits in 1440 dp.
+    UpdateStage(context,FitStage(context,width,height,1440.f,1080.f,.25f)); return true;
 }
 void BroadcastView::Render() { if (context && document) context->Render(); }
 }

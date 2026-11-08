@@ -36,6 +36,8 @@ int RmlHost_Visible(void);
 int RmlHost_Reload(void);
 int RmlHost_SetSourceDirectory(const char *directory);
 int RmlHost_SetModSourceDirectory(const char *directory);
+/* UTF-8 folder of player images (<name key>.png or .jpg); see avatars.hpp. */
+void RmlHost_SetAvatarDirectory(const char *directory);
 void RmlHost_EconomyDialog(int confirmation);
 int RmlHost_ActionAllowed(const char *response);
 void RmlHost_MouseMove(int x, int y);

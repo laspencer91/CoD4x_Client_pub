@@ -11,6 +11,7 @@
 #include "rml/rml_host.h"
 #include "rml/native_keys.h"
 #include "win_sys.h"
+#include "sys_patch.h"
 #include <stdlib.h>
 
 /* The native mouse route uses bit 0x10 for modal menus. */
@@ -28,6 +29,13 @@ static qboolean rml_open_pending, rml_first_frame_pending;
 static int rml_buy_key_at, rml_local_open_at;
 static int rml_scores_server_id = -1; /* map load (cl.serverId) whose team scores were last requested */
 static qboolean rml_follow_drawn;
+/* The stock FPS readout in the HUD's style (cl_rml_stock.asm). While the HUD is drawn, each line CG_DrawFPSDebugInfo
+ * prints is kept here instead of drawn; the engine fills one buffer while the HUD reads the other. */
+#define RML_CORNER_LINES 16
+int rml_corner_capture;
+int rml_hud_drawn; /* the match HUD was drawn last frame: it shows the stock readouts in its style */
+static struct { char text[96], label[32]; } rml_corner[2][RML_CORNER_LINES];
+static int rml_corner_count[2], rml_corner_front, rml_corner_time, rml_corner_patched;
 static Material *rml_cursor;
 static int rml_cursor_x, rml_cursor_y;
 static int rml_other_thread_frames; /* screen updates from the render thread during loads, which RML skips */
@@ -80,6 +88,44 @@ void CL_Rml_FocusLost(void)
     CL_ShowSystemCursor(1);
 }
 
+qboolean CG_GetClientName(int index, char *buf, int size);
+
+float CL_Rml_CornerLine(const char *text, const char *label)
+{
+    const int back = !rml_corner_front, n = rml_corner_count[back];
+    if (n < RML_CORNER_LINES) {
+        Q_strncpyz(rml_corner[back][n].text, text ? text : "", sizeof(rml_corner[back][n].text));
+        Q_strncpyz(rml_corner[back][n].label, label ? label : "", sizeof(rml_corner[back][n].label));
+        rml_corner_count[back] = n + 1;
+    }
+    return 0.0f;
+}
+void CL_Rml_CornerBegin(void) { rml_corner_count[!rml_corner_front] = 0; rml_corner_capture = rml_hud_drawn; }
+void CL_Rml_CornerEnd(void) { rml_corner_capture = 0; rml_corner_front = !rml_corner_front; rml_corner_time = Sys_Milliseconds(); }
+
+void CL_Rml_CornerPrintStub(void);
+void CL_Rml_CornerHeadingStub(void);
+void CL_Rml_LagometerStub(void);
+/* Changes a call only where the stock 1.7 executable has the expected one. */
+static void CL_Rml_PatchCall(DWORD at, DWORD expected, void (*stub)(void))
+{
+    const byte *code = (const byte *)at;
+    if (code[0] != 0xE8 || at + 5 + *(const int32_t *)(code + 1) != expected) return;
+    SetCall(at, (void *)stub);
+    ++rml_corner_patched;
+}
+void CL_Rml_Patch(void)
+{
+    /* CG_DrawFPSDebugInfo's calls to its line print (0x42B710) and section heading (0x42B800). */
+    static const DWORD prints[] = {0x42BB2B, 0x42BB85, 0x42BC27, 0x42BC83, 0x42BCE0, 0x42BD35, 0x42BD7C, 0x42BDFF, 0x42BE8E};
+    static const DWORD headings[] = {0x42BBCF, 0x42BDAA};
+    unsigned i;
+    for (i = 0; i < sizeof(prints) / sizeof(*prints); ++i) CL_Rml_PatchCall(prints[i], 0x42B710, CL_Rml_CornerPrintStub);
+    for (i = 0; i < sizeof(headings) / sizeof(*headings); ++i) CL_Rml_PatchCall(headings[i], 0x42B800, CL_Rml_CornerHeadingStub);
+    /* CG_Draw2D's call to the lagometer. */
+    CL_Rml_PatchCall(0x42F77D, 0x42FAC0, CL_Rml_LagometerStub);
+}
+
 static const char* CL_Rml_Value(const char* name)
 {
     static char color[10];
@@ -101,6 +147,56 @@ static const char* CL_Rml_Value(const char* name)
     if (!strcmp(name,"rml_seconds_left")) {
         if (cgs.gameEndTime <= 0) return "";
         Com_sprintf(color,sizeof(color),"%d",cgs.gameEndTime > cg.time ? (cgs.gameEndTime - cg.time + 999) / 1000 : 0); return color;
+    }
+    /* Every client's name and team reach every client (client info); the HUD's other-team tiles show only those. */
+    if (!strcmp(name,"rml_other_clients")) {
+        static char list[64 * 3 + 1];
+        const team_t mine = cg.bgs.clientinfo[cg.clientNum].team;
+        const team_t other = mine == TEAM_RED ? TEAM_BLUE : mine == TEAM_BLUE ? TEAM_RED : TEAM_FREE;
+        int n, length = 0;
+        list[0] = 0;
+        for (n = 0; n < 64 && other != TEAM_FREE; ++n)
+            if (cg.bgs.clientinfo[n].infoValid && cg.bgs.clientinfo[n].team == other)
+                length += Com_sprintf(list + length, sizeof(list) - length, "%d ", n);
+        return list;
+    }
+    if (!strncmp(name,"rml_client_name_",16)) {
+        /* The name the engine's own HUD shows (CoD4x servers send longer names than client info holds). */
+        static char client_name[64];
+        const int n = atoi(name + 16);
+        if (n < 0 || n >= 64 || !CG_GetClientName(n, client_name, sizeof(client_name))) client_name[0] = 0;
+        return client_name;
+    }
+    /* The stock FPS readout's lines from the last frame the engine drew it (none once it stops). */
+    if (!strcmp(name,"rml_corner_lines")) {
+        Com_sprintf(color,sizeof(color),"%d",Sys_Milliseconds() - rml_corner_time < 500 ? rml_corner_count[rml_corner_front] : 0);
+        return color;
+    }
+    if (!strncmp(name,"rml_corner_text_",16) || !strncmp(name,"rml_corner_label_",17)) {
+        const qboolean text = name[11] == 't';
+        const int n = atoi(name + (text ? 16 : 17));
+        if (n < 0 || n >= rml_corner_count[rml_corner_front]) return "";
+        return text ? rml_corner[rml_corner_front][n].text : rml_corner[rml_corner_front][n].label;
+    }
+    /* The stock lagometer's samples (lagometer_t at 0x7440D8, written on this thread once per frame and once per
+     * snapshot), newest first, the 48 the stock graph draws. Shown under the stock rules: cg_drawLagometer, never on
+     * a listen server; "snc" with cg_nopredict or g_synchronousClients. */
+    if (!strcmp(name,"rml_lagometer_on")) return Cvar_GetInt("cg_drawLagometer") && !cgs.localServer ? "1" : "0";
+    if (!strcmp(name,"rml_lagometer_snc")) return Cvar_GetInt("cg_nopredict") || Cvar_GetInt("g_synchronousClients") ? "1" : "0";
+    if (!strcmp(name,"rml_lagometer_frames") || !strcmp(name,"rml_lagometer_snaps") || !strcmp(name,"rml_lagometer_delayed")) {
+        static char list[48 * 8];
+        const lagometer_t *lag = (const lagometer_t *)0x7440D8;
+        const char which = name[14];
+        int a, length = 0;
+        list[0] = 0;
+        for (a = 0; a < 48; ++a) {
+            const int frame = lag->frameSamples[(lag->frameCount - 1 - a) & 127];
+            const int snap = (lag->snapshotCount - 1 - a) & 127;
+            if (which == 'd') list[length++] = lag->snapshotFlags[snap] & 1 ? '1' : '0';
+            else length += Com_sprintf(list + length, sizeof(list) - length, "%d,", which == 'f' ? frame : lag->snapshotSamples[snap]);
+        }
+        list[length] = 0;
+        return list;
     }
     if (!strcmp(name,"rml_local_team")) {
         static const char *teams[] = {"", "axis", "allies", "spectator"};
@@ -129,7 +225,7 @@ static void CL_Rml_Cards_f(void) { Cvar_SetInt(rml_cards,(rml_cards->integer+1)%
 int CL_Rml_FollowDrawn(void) { return rml_follow_drawn; }
 void CL_Rml_Disconnect(void)
 {
-    CL_Rml_Hide(); RmlHost_EnableBroadcast(0); rml_follow_drawn = qfalse;
+    CL_Rml_Hide(); RmlHost_EnableBroadcast(0); rml_follow_drawn = rml_hud_drawn = qfalse;
     Cvar_SetStringByName("ui_rml_hud","0"); Cvar_SetStringByName("ui_rml_broadcast_drawn","0");
     rml_scores_server_id = -1;
     /* Server-published state that gates the local open and the HUD must not carry over to the next server. */
@@ -286,6 +382,9 @@ static void CL_Rml_Status_f(void)
     Com_Printf(CON_CHANNEL_UI,"RmlUi broadcast: ready=%d drawn=%d captured=%d hud=%d team=%s allies=%d axis=%d end=%d time=%d cards=%d\n",
         RmlHost_BroadcastReady(),Cvar_GetInt("ui_rml_broadcast_drawn"),rml_captured,Cvar_GetInt("ui_rml_hud"),CL_Rml_Value("rml_local_team"),
         cg.teamScores[2],cg.teamScores[1],cgs.gameEndTime,cg.time,rml_cards->integer);
+    Com_Printf(CON_CHANNEL_UI,"RmlUi tiles: other team clients=%s\n",CL_Rml_Value("rml_other_clients"));
+    Com_Printf(CON_CHANNEL_UI,"RmlUi stock readouts: %d of 12 calls patched (FPS 11, lagometer 1), hud=%d fps lines=%s lagometer=%s\n",
+        rml_corner_patched,rml_hud_drawn,CL_Rml_Value("rml_corner_lines"),CL_Rml_Value("rml_lagometer_on"));
     Com_Printf(CON_CHANNEL_UI,"RmlUi economy: cash=%s frag=%s armor=%s buy=%d allowed=%d adopted=%d\n",
         Cvar_GetString("economy_cash"),Cvar_GetString("economy_frag_owned"),Cvar_GetString("economy_armor_charges"),
         Cvar_GetInt("economy_buy_open"),Cvar_GetInt("economy_purchase_allowed"),rml_menus[0].menu!=NULL);
@@ -299,6 +398,14 @@ void CL_Rml_Init(void)
     if (source && !RmlHost_SetSourceDirectory(source)) CL_Rml_Log("development source directory is unavailable");
     if (mod_source && !RmlHost_SetModSourceDirectory(mod_source)) CL_Rml_Log("mod authoring directory is unavailable");
 #endif
+    {
+        /* Player images for the HUD: <save path>\avatars, beside the profiles (docs/rmlui.md). */
+        char avatars[MAX_OSPATH * 3];
+        if (WideCharToMultiByte(CP_UTF8, 0, FS_GetSavePath(), -1, avatars, sizeof(avatars) - 9, NULL, NULL) > 1) {
+            strcat(avatars, "\\avatars");
+            RmlHost_SetAvatarDirectory(avatars);
+        }
+    }
     rml_enabled = Cvar_RegisterBool("r_rmlUi", qtrue, 0, "Enable the optional RmlUi host");
     rml_economy = Cvar_RegisterBool("r_rmlEconomy", qtrue, 0, "Use RmlUi for class/loadout menus, with native fallback");
     rml_broadcast = Cvar_RegisterBool("cg_rmlBroadcast", qtrue, CVAR_ARCHIVE, "Use the passive match and spectator HUD");
@@ -379,7 +486,7 @@ void CL_Rml_Frame(void)
         RmlHost_EnableBroadcast(draw_hud);
     }
     if (!rml_enabled || !rml_enabled->boolean || (!RmlHost_Visible() && !Cvar_GetInt("ui_rml_hud"))) {
-        Cvar_SetStringByName("ui_rml_broadcast_drawn","0"); rml_follow_drawn = qfalse;
+        Cvar_SetStringByName("ui_rml_broadcast_drawn","0"); rml_follow_drawn = rml_hud_drawn = qfalse;
         if (rml_captured) CL_Rml_Hide();
         return;
     }
@@ -391,6 +498,7 @@ void CL_Rml_Frame(void)
     }
     Cvar_SetStringByName("ui_rml_broadcast_drawn",queued && RmlHost_BroadcastReady() ? "1" : "0");
     rml_follow_drawn = queued && RmlHost_BroadcastFollowShown();
+    rml_hud_drawn = queued && RmlHost_BroadcastReady();
     if (ticket && !queued) RmlHost_Discard(ticket);
     if (ticket && RmlHost_Visible() && IN_AppActive() && !(clientUIActives.keyCatchers & KEYCATCH_CONSOLE) && rml_cursor && !Material_IsDefault(rml_cursor)) {
         const float size = 32.0f * _vidConfig.displayHeight / 480.0f;

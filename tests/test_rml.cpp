@@ -3,6 +3,7 @@
 #include "rml/native_keys.h"
 #include <RmlUi/Core.h>
 #include "rml/source.hpp"
+#include "rml/avatars.hpp"
 #include <windows.h>
 #include <d3d9.h>
 #include <d3dx9tex.h>
@@ -137,6 +138,12 @@ struct Device {
         RmlHost_DeviceLost(); ReleaseTarget(); device->Release(); api->Release(); DestroyWindow(window);
     }
 };
+// Matches of a selector that are on screen (data-for keeps a hidden template element after its rows).
+Rml::ElementList VisibleElements(Rml::Element* root, const char* selector) {
+    Rml::ElementList list; root->QuerySelectorAll(list, selector);
+    list.erase(std::remove_if(list.begin(), list.end(), [](Rml::Element* e) { return !e->IsVisible(); }), list.end());
+    return list;
+}
 bool Near(DWORD pixel, int r, int g, int b) {
     return abs(int((pixel >> 16) & 255) - r) <= 2 && abs(int((pixel >> 8) & 255) - g) <= 2 && abs(int(pixel & 255) - b) <= 2;
 }
@@ -175,26 +182,27 @@ int main(int argc, char** argv) {
         auto* doc=Rml::GetContext("cod4x-broadcast")->GetDocument(0);
         Require(doc->QuerySelector(".match-clock")->GetInnerRML()=="1:22" && doc->QuerySelector(".match-clock")->GetBox().GetSize().y>0,
             "HUD reads and lays out the authoritative round clock");
-        Rml::ElementList cards; doc->QuerySelectorAll(cards,".player-card");
-        cards.erase(std::remove_if(cards.begin(),cards.end(),[](Rml::Element* element) { return !element->IsVisible(); }),cards.end());
+        Rml::ElementList cards=VisibleElements(doc,".player-card");
         Require(cards.size()==10 && cards[0]->IsClassSet("dead") && cards[2]->IsClassSet("observed"), "shared cards reflect dead and observed states");
-        auto* name=cards[0]->QuerySelector("player-name");
-        Require(name->GetNumChildren()==2 && name->GetChild(0)->GetInnerRML()=="Hi", "player name preserves game color runs");
-        name->SetAttribute("text", "^1<img src='x' />^7Z^"); gpu.Render(1.4);
-        Require(name->QuerySelector("img")==nullptr && name->GetNumChildren()==2, "player names stay text and preserve a trailing caret");
-        name->SetAttribute("text", names[0]); gpu.Render(1.5);
+        Require(VisibleElements(doc,".mate-card").empty(), "observers get the side rosters, not the players' tiles");
+        auto* name=cards[0]->QuerySelector(".player-name");
+        Require(name->GetInnerRML()=="Hias", "roster names drop colour codes");
+        economy_values["shout_name0"]="^1<img src='x' />^7Z"; gpu.Render(1.4);
+        Require(name->QuerySelector("img")==nullptr && name->GetInnerRML().find("img")!=Rml::String::npos, "player names stay text");
+        economy_values["shout_name0"]=names[0]; gpu.Render(1.5);
         Check(D3DXSaveSurfaceToFileA(RML_TEST_OUTPUT "/rml-broadcast-expanded.png",D3DXIFF_PNG,gpu.surface,nullptr,nullptr),"capture expanded match HUD");
         economy_values["rml_follow_client"]="1"; gpu.Render(1.6);
         Require(cards[1]->IsClassSet("observed") && !cards[2]->IsClassSet("observed"), "camera highlight follows native viewed-client changes without server roster updates");
         {
             auto* plate=doc->QuerySelector(".follow-plate");
-            Require(plate && plate->IsVisible() && RmlHost_BroadcastFollowShown() &&
-                plate->QuerySelector("player-name")->GetAttribute<Rml::String>("text","")=="^5Cooper", "the bottom plate shows the followed player");
+            Require(plate && plate->IsVisible() && !plate->IsClassSet("player") && plate->QuerySelector(".follow-slot")->IsVisible() && RmlHost_BroadcastFollowShown() &&
+                plate->QuerySelector(".follow-name")->GetInnerRML()=="Cooper", "the bottom plate shows the followed player");
             const auto card=cards[5]->GetAbsoluteOffset(Rml::BoxArea::Border);
             const float density=Rml::GetContext("cod4x-broadcast")->GetDensityIndependentPixelRatio();
-            Require(cards[0]->GetAbsoluteOffset(Rml::BoxArea::Border).x<1 && card.x+cards[5]->GetBox().GetSize(Rml::BoxArea::Border).x>1919 &&
+            const float left=cards[0]->GetAbsoluteOffset(Rml::BoxArea::Border).x, right=card.x+cards[5]->GetBox().GetSize(Rml::BoxArea::Border).x;
+            Require(std::abs(left-12*density)<1 && std::abs(right-(1920-12*density))<1 &&
                 cards[5]->QuerySelector(".portrait-placeholder")->GetAbsoluteOffset(Rml::BoxArea::Border).x>card.x+300*density,
-                "team rows sit against the screen edges and the axis side is mirrored");
+                "team rows sit inset from the screen edges, as the minimap is, and the axis side is mirrored");
         }
         economy_values["shout_name0"]="Replacement"; economy_values["shout_health0"]="1";
         gpu.Render(1.7);
@@ -226,8 +234,8 @@ int main(int argc, char** argv) {
             const auto offset=bar->GetAbsoluteOffset(Rml::BoxArea::Border), dimensions=bar->GetBox().GetSize(Rml::BoxArea::Border);
             const float density=Rml::GetContext("cod4x-broadcast")->GetDensityIndependentPixelRatio();
             Require(offset.x>=0 && offset.x+dimensions.x<=size.x+1 && offset.y<30*density, "match bar stays at the viewport top on 4:3 and ultrawide");
-            const float header=doc->QuerySelector(".roster-heading.allies")->GetAbsoluteOffset(Rml::BoxArea::Border).y;
-            Require(header<size.y*.5f-80*density && header>size.y*.5f-200*density, "team stacks stay centred on the viewport's middle");
+            const float stacks=doc->QuerySelector(".roster")->GetAbsoluteOffset(Rml::BoxArea::Border).y;
+            Require(std::abs(stacks-290*density)<2, "team stacks hang under the minimap, clear of the screen's middle");
         }
         economy_values["rml_team_color_allies"]="#99a3b0"; economy_values["rml_team_color_axis"]="#a69169"; gpu.Render(3.9); gpu.Render(3.95);
         {
@@ -235,7 +243,7 @@ int main(int argc, char** argv) {
             Require(faction.red==188 && faction.green==195 && faction.blue==203, "observer scores use the scoreboard's faction colours");
         }
         economy_values["rml_local_team"]="axis"; gpu.Render(4.0);
-        Require(!RmlHost_BroadcastFollowShown(), "players never get the observer's followed-player plate");
+        Require(!RmlHost_BroadcastFollowShown(), "a player's plate never follows the other team");
         {
             gpu.Target(1920,1080); gpu.Render(4.05);
             Rml::ElementList scores; doc->QuerySelectorAll(scores,".score-value");
@@ -243,6 +251,114 @@ int main(int argc, char** argv) {
                 scores[0]->GetInnerRML()=="3" && scores[1]->GetInnerRML()=="12", "players see their own team's score on the left");
             Require(!doc->QuerySelector(".alive-count") || !doc->QuerySelector(".alive-count")->IsVisible(), "player bar omits alive counts");
             Require(doc->QuerySelector(".round-strip > div")->GetInnerRML()=="ROUND 16", "the round number comes from server info");
+            using cod4x::rml::avatars::Key;
+            Require(Key("^1Bies^7sman")=="biessman" && Key("Mr. Bean!")=="mr__bean_" && Key("^7^1").empty() && Key("..").empty(),
+                "player image keys drop colour codes and keep only a-z, 0-9 and _");
+            {
+                // 96 x 64: red and blue bands either side of a magenta centre square, so the crop shows in pixels.
+                const std::string folder=std::string(RML_TEST_OUTPUT)+"/avatars";
+                CreateDirectoryA(folder.c_str(),nullptr);
+                IDirect3DSurface9* image=nullptr; D3DLOCKED_RECT locked;
+                Check(gpu.device->CreateOffscreenPlainSurface(96,64,D3DFMT_A8R8G8B8,D3DPOOL_SYSTEMMEM,&image,nullptr),"create player image");
+                Check(image->LockRect(&locked,nullptr,0),"lock player image");
+                for (int y=0;y<64;++y) for (int x=0;x<96;++x)
+                    reinterpret_cast<DWORD*>(static_cast<char*>(locked.pBits)+y*locked.Pitch)[x]=x<16 ? 0xffff0000 : x>=80 ? 0xff0000ff : 0xffff00ff;
+                image->UnlockRect();
+                Check(D3DXSaveSurfaceToFileA((folder+"/biessman.png").c_str(),D3DXIFF_PNG,image,nullptr,nullptr),"write player image");
+                image->Release();
+                RmlHost_SetAvatarDirectory(folder.c_str());
+            }
+            // The viewer is axis (slots 5-9). The other team's tiles come from the engine's client list (names and
+            // teams every client has); this client still holds that team's roster health from the observer fixture
+            // above, and the tiles must show none of it.
+            economy_values["rml_other_clients"]="0 1 2 3 4 ";
+            for (int i=0;i<5;++i) economy_values["rml_client_name_"+std::to_string(i)]=names[i];
+            gpu.Render(4.07);
+            // A worker decodes the image; the tile shows it once ready.
+            for (int wait=0;wait<300 && !(VisibleElements(doc,".team-strip.own .mate-avatar").size()==1);++wait) { Sleep(10); gpu.Render(4.08); }
+            const auto own=VisibleElements(doc,".team-strip.own .mate-card"), enemy=VisibleElements(doc,".team-strip.other .mate-card");
+            Require(own.size()==5 && enemy.size()==5, "players get a tile per player on each side");
+            Require(own[0]->IsClassSet("dead") && !own[1]->IsClassSet("dead") && own[2]->IsClassSet("dead") && !own[3]->IsClassSet("dead"),
+                "own tiles show who is alive");
+            Require(std::none_of(enemy.begin(),enemy.end(),[](Rml::Element* e) { return e->IsClassSet("dead"); }) &&
+                !enemy[0]->QuerySelector(".mate-fill") && enemy[0]->QuerySelector(".mate-initials")->GetInnerRML()=="HI",
+                "the other team's tiles show identity only, whatever roster values the client holds");
+            Require(own[3]->QuerySelector(".mate-initials")->GetInnerRML()=="AD" && !own[3]->QuerySelector(".mate-avatar")->IsVisible(), "a player without an image shows initials");
+            {
+                auto* score=doc->QuerySelector(".match-score");
+                const auto bar=score->GetAbsoluteOffset(Rml::BoxArea::Border);
+                const float bar_width=score->GetBox().GetSize(Rml::BoxArea::Border).x;
+                const auto last=own[4]->GetAbsoluteOffset(Rml::BoxArea::Border), first=enemy[0]->GetAbsoluteOffset(Rml::BoxArea::Border);
+                const float centre=last.y+own[4]->GetBox().GetSize(Rml::BoxArea::Border).y/2, bar_centre=bar.y+score->GetBox().GetSize(Rml::BoxArea::Border).y/2;
+                Require(last.x+own[4]->GetBox().GetSize(Rml::BoxArea::Border).x<bar.x && first.x>bar.x+bar_width && std::abs(centre-bar_centre)<2,
+                    "tiles sit either side of the score bar, centred on its height");
+                auto* avatar=own[1]->QuerySelector(".mate-avatar");
+                Require(avatar && avatar->IsVisible(), "a player with an image in the folder shows it once decoded");
+                const auto at=avatar->GetAbsoluteOffset(Rml::BoxArea::Border); const auto size=avatar->GetBox().GetSize(Rml::BoxArea::Border);
+                const auto pixels=gpu.Pixels();
+                auto pixel=[&](float x, float y) { return pixels[size_t(std::lround(y))*1920+size_t(std::lround(x))]; };
+                // The tile is semi-transparent and the image slightly dimmed, so magenta reads as a muted magenta; the
+                // red and blue side bands would show as red or blue.
+                auto magenta=[](DWORD p) { const int r=(p>>16)&255, g=(p>>8)&255, b=p&255; return r-g>60 && b-g>60 && std::abs(r-b)<25; };
+                Require(magenta(pixel(at.x+size.x/2,at.y+size.y/2)) && magenta(pixel(at.x+3,at.y+size.y/2)) &&
+                    magenta(pixel(at.x+size.x-4,at.y+size.y/2)), "a wide image is cropped to its centre square");
+            }
+            Check(D3DXSaveSurfaceToFileA(RML_TEST_OUTPUT "/rml-broadcast-player-tiles.png",D3DXIFF_PNG,gpu.surface,nullptr,nullptr),"capture player tiles");
+            economy_values["shout_health6"]="0.2"; gpu.Render(4.1);
+            Require(own[1]->IsClassSet("hit") && own[1]->IsClassSet("low"), "a teammate's health drop flashes and turns the strip red at a quarter");
+            gpu.Render(4.12);
+            Require(!own[1]->IsClassSet("hit") && own[1]->IsClassSet("low"), "the flash lasts one frame (the stylesheet fades it) and the low state stays");
+            economy_values["shout_health6"]="1";
+            economy_values["rml_follow_client"]="6"; gpu.Render(4.45);
+            Require(RmlHost_BroadcastFollowShown() && doc->QuerySelector(".follow-plate .follow-name")->GetInnerRML()=="Biessman",
+                "a dead player following a teammate gets the bottom plate instead of the engine's top text");
+            {
+                auto* plate=doc->QuerySelector(".follow-plate");
+                const float density=Rml::GetContext("cod4x-broadcast")->GetDensityIndependentPixelRatio();
+                Require(plate->IsClassSet("player") && !plate->QuerySelector(".follow-slot")->IsVisible() &&
+                    std::abs(plate->GetBox().GetSize(Rml::BoxArea::Border).x-300*density)<1 && !plate->QuerySelector(".follow-weapon"),
+                    "a player's followed-teammate card is the compact variant: name and health, no number key or weapon");
+            }
+            Require(doc->QuerySelector(".follow-ghost") && doc->QuerySelector(".follow-ghost")->IsVisible() &&
+                doc->QuerySelector(".follow-ghost")->GetAttribute<Rml::String>("src","")=="avatars/ghost/biessman", "the plate shows the followed player's image as a ghost");
+            economy_values["rml_follow_client"]="1"; gpu.Render(4.46);
+            // The stock FPS readout's lines as the engine formats them (cl_rml.c captures them while the HUD draws).
+            economy_values["rml_corner_lines"]="2"; economy_values["cg_drawFPSLabels"]="1";
+            economy_values["rml_corner_text_0"]="(83-100, 0) 91"; economy_values["rml_corner_label_0"]=" FPS";
+            economy_values["rml_corner_text_1"]="(10-12) 11.03"; economy_values["rml_corner_label_1"]=" cg ms/frame";
+            gpu.Render(4.47);
+            {
+                const auto lines=VisibleElements(doc,".corner-line");
+                Require(lines.size()==2 && lines[0]->GetInnerRML().find("(83-100, 0) 91")!=Rml::String::npos &&
+                    lines[0]->QuerySelector(".corner-label")->IsVisible() && lines[0]->QuerySelector(".corner-label")->GetInnerRML()==" FPS",
+                    "the HUD shows the stock FPS readout's lines and labels");
+                const auto box=doc->QuerySelector(".corner-readout")->GetAbsoluteOffset(Rml::BoxArea::Border).x+doc->QuerySelector(".corner-readout")->GetBox().GetSize(Rml::BoxArea::Border).x;
+                Require(box>1880 && box<=1920, "the readout sits in the top-right corner");
+                Check(D3DXSaveSurfaceToFileA(RML_TEST_OUTPUT "/rml-broadcast-fps.png",D3DXIFF_PNG,gpu.surface,nullptr,nullptr),"capture FPS readout");
+            }
+            // The stock lagometer: 48 samples newest first, drawn as geometry under the readout.
+            {
+                Rml::String frames, snaps, delayed;
+                for (int a=0;a<48;++a) {
+                    frames+=std::to_string(a%7==0 ? 120 : -40-a)+","; snaps+=std::to_string(a==5 ? -1 : 300+a*10)+","; delayed+=a==9 ? '1' : '0';
+                }
+                economy_values["rml_lagometer_on"]="1"; economy_values["rml_lagometer_frames"]=frames;
+                economy_values["rml_lagometer_snaps"]=snaps; economy_values["rml_lagometer_delayed"]=delayed;
+            }
+            gpu.Render(4.475); gpu.Render(4.476);
+            {
+                auto* lag=doc->QuerySelector(".lagometer");
+                Require(lag && lag->IsVisible() && lag->QuerySelector("lag-graph")->GetBox().GetSize().x>90 &&
+                    lag->GetAbsoluteOffset(Rml::BoxArea::Border).y>doc->QuerySelector(".corner-readout")->GetAbsoluteOffset(Rml::BoxArea::Border).y,
+                    "the lagometer draws under the FPS readout");
+                Check(D3DXSaveSurfaceToFileA(RML_TEST_OUTPUT "/rml-broadcast-diagnostics.png",D3DXIFF_PNG,gpu.surface,nullptr,nullptr),"capture diagnostics");
+                economy_values["rml_lagometer_on"]="0"; gpu.Render(4.477);
+                Require(!doc->QuerySelector(".lagometer") || !doc->QuerySelector(".lagometer")->IsVisible(), "no lagometer when the option is off");
+            }
+            economy_values["cg_drawFPSLabels"]="0"; gpu.Render(4.48);
+            Require(!VisibleElements(doc,".corner-line")[0]->QuerySelector(".corner-label")->IsVisible(), "labels follow cg_drawFPSLabels");
+            economy_values["rml_corner_lines"]="0"; gpu.Render(4.49);
+            Require(VisibleElements(doc,".corner-line").empty(), "no readout when the engine prints none (FPS Counter off)");
             economy_values["rml_seconds_left"]=""; gpu.Render(4.06);
             Require(doc->QuerySelector(".match-clock")->GetInnerRML().empty(), "no engine end time shows no clock");
             economy_values["rml_seconds_left"]="82";

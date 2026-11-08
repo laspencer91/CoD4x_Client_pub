@@ -34,6 +34,18 @@ inline bool FitStage(Rml::Context* context, int width, int height, float base_wi
 // A resize needs a second pass so layout settles at the new density.
 inline void UpdateStage(Rml::Context* context, bool resized) { context->Update(); if (resized) context->Update(); }
 
+// A CoD colour escape (^0 to ^@) starts at text[i]; <player-name> colours by it and StripColors drops it.
+inline bool IsColorEscape(const Rml::String& text, size_t i) {
+    return text[i] == '^' && i + 1 < text.size() && text[i + 1] >= '0' && text[i + 1] <= '@';
+}
+inline Rml::String StripColors(const Rml::String& name) {
+    Rml::String plain;
+    for (size_t i = 0; i < name.size(); ++i) {
+        if (IsColorEscape(name, i)) ++i;
+        else plain += name[i];
+    }
+    return plain;
+}
 // "images/<key>.tga" for an asset key, or empty when the key could form any other path.
 inline Rml::String ImagePath(const Rml::String& key) {
     if (key.empty() || key.find_first_not_of("abcdefghijklmnopqrstuvwxyz0123456789_-") != Rml::String::npos) return {};

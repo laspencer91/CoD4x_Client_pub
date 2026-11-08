@@ -316,11 +316,13 @@ int main(int argc, char** argv) {
                 auto* plate=doc->QuerySelector(".follow-plate");
                 const float density=Rml::GetContext("cod4x-broadcast")->GetDensityIndependentPixelRatio();
                 Require(plate->IsClassSet("player") && !plate->QuerySelector(".follow-slot")->IsVisible() &&
-                    std::abs(plate->GetBox().GetSize(Rml::BoxArea::Border).x-300*density)<1 && !plate->QuerySelector(".follow-weapon"),
-                    "a player's followed-teammate card is the compact variant: name and health, no number key or weapon");
+                    !plate->QuerySelector(".follow-health")->IsVisible() && !plate->QuerySelector(".follow-edge")->IsVisible() &&
+                    !plate->QuerySelector(".follow-label")->IsVisible() && plate->QuerySelector(".follow-name")->IsVisible(),
+                    "a player following a teammate sees only the teammate's name");
+                Check(D3DXSaveSurfaceToFileA(RML_TEST_OUTPUT "/rml-broadcast-teammate.png",D3DXIFF_PNG,gpu.surface,nullptr,nullptr),"capture the followed teammate's name");
             }
-            Require(doc->QuerySelector(".follow-ghost") && doc->QuerySelector(".follow-ghost")->IsVisible() &&
-                doc->QuerySelector(".follow-ghost")->GetAttribute<Rml::String>("src","")=="avatars/ghost/biessman", "the plate shows the followed player's image as a ghost");
+            Require(doc->QuerySelector(".follow-ghost") && !doc->QuerySelector(".follow-ghost")->IsVisible() &&
+                doc->QuerySelector(".follow-ghost")->GetAttribute<Rml::String>("src","")=="avatars/ghost/biessman", "the ghost image is bound but only spectators' cards show it");
             economy_values["rml_follow_client"]="1"; gpu.Render(4.46);
             // The stock FPS readout's lines as the engine formats them (cl_rml.c captures them while the HUD draws).
             economy_values["rml_corner_lines"]="2"; economy_values["cg_drawFPSLabels"]="1";

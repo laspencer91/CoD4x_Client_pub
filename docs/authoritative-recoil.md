@@ -42,12 +42,12 @@ Stock clients keep working on model-0 (native) servers. Bullet spread is untouch
 ```
 client frame N                                    server, command N  (SV_ClientThink, C)
 --------------                                    -----------------
-sim = committed + replay(records < N)             Recoil_Advance(sim, rawTime_N, inputs(ps before N))
+sim = committed + replay(records < N)             Recoil_Advance(sim, gameTime_N, inputs(ps before N))
 Recoil_Advance(sim, T_N, inputs(predicted ps))    lastUsercmd.angles = wire + offset(sim)
 cl.cmds[N].angles = SHORT(aim) + offset(sim)      ClientThink -> Pmove -> G_PlayerEvent per fire event
 wire = cl.cmds[N].angles - offset   (CL_WritePacket)     -> hook: Recoil_Shot(sim) + gun kick x model scale
 prediction: Pmove wrapper records cmd N inputs    ...
-  and fire events -> record[N]                    snapshot: svc_recoil {rawTime of last cmd, sim}
+  and fire events -> record[N]                    after a new shot: svc_recoil {time of last cmd, sim}
 svc_recoil -> committed = server state; replay
 ```
 
@@ -55,8 +55,10 @@ svc_recoil -> committed = server state; replay
   killcam and demos. There are no player-state or snapshot-field changes.
 - **Client view.** The client keeps folded commands locally, so prediction and the view are unchanged.
 - **Correction.** The server sends its simulation state for the last executed command in a small message
-  (`svc_recoil`) that only capable clients receive. The client adopts it and replays its later command
-  records, as in ScrapCore's predicted `MovementState`. A misprediction (a rejected shot, a script weapon
+  (`svc_recoil`) that only capable clients receive: once after each new shot, and every 500 ms otherwise.
+  Between shots both sides recover from the same inputs, so more would add nothing; the rate does not
+  depend on the server's snapshot rate. The client adopts it and replays its later command records, as in
+  ScrapCore's predicted `MovementState`. A misprediction (a rejected shot, a script weapon
   change, a lost command, a clamped time) appears once, at most as a snap of the gap, instead of
   lingering.
 - **Listen server.** The host's client folds the offset into the wire ("local fold"), because the server
@@ -67,8 +69,10 @@ svc_recoil -> committed = server state; replay
 
 ## 4. Determinism rules
 
-- **Time.** The raw command `serverTime` is used on both sides. On the server it is the command passed
-  to `SV_ClientThink`, before `ClientThink_real` clamps it. `ps.commandTime` is never used.
+- **Time.** The command `serverTime`. The server clamps it exactly as `ClientThink_real` does, to
+  `[level.time - 1000, level.time + 200]`, so recoil follows game time: a client that sends times running
+  faster than the game buys no extra recovery. A legitimate client is inside that window, where both sides
+  use its raw time. `ps.commandTime` is never used. (Revision 3; revision 2 used the unclamped time.)
 - **Integer fixed point.** Angle in micro-degrees and angular velocity in milli-degrees per second
   (micro-degrees per ms), so every step is exact integer arithmetic. The 0.06 return damping is
   `x * 6 / 100` with C99 truncation.
@@ -79,8 +83,10 @@ svc_recoil -> committed = server state; replay
   removes that. A simulation at rest jumps its time forward.
 - **WeaponDef conversion.** `floor(x * 1000.0 + 0.5)` in double is exact for every float, so both sides
   get the same integers from the same fastfile.
-- **Shot randomness.** `splitmix64` over (domain, clientNum, raw command time, shot index within the
-  command, weapon). It is history-free, so one disputed shot never shifts the next.
+- **Shot randomness.** `splitmix64` over (domain, clientNum, shot number, weapon). The shot number is the
+  simulation's count of shots, which survives deaths and travels in the correction, so the n-th shot always
+  gets the n-th roll. No input is the client's choice. (Revision 3: revision 2 hashed the command time,
+  which the client picks; holding a shot back a few ms would have let it choose its roll.)
 - **Fold.** `offset = round(angle * 65536 / 360e6)` angle-short units. The client sets
   `cmd = ANGLE2SHORT(aim) + offset`, so `wire = cmd - offset` is exact, and the server sets
   `lastUsercmd = wire + offset`.
@@ -106,53 +112,13 @@ recoil/sim.h        state, native impulse, native step, advance, shot, fold (new
 recoil/models/*.h   one file per model (continuous.h first)
 ```
 
-```c
-typedef struct { int32_t angle[3], speed[3]; } recoil_kick_t;   /* udeg, mdeg/s: pitch, yaw, roll */
-typedef struct {
-    uint32_t time;                  /* last advanced raw command time; 0 = unset */
-    recoil_kick_t kick;
-    uint32_t model_state[4];        /* private to the active model */
-} recoil_sim_t;
-
-typedef struct {                    /* from WeaponDef, fixed point, filled by one shared inline */
-    int32_t view_pitch[2][2], view_yaw[2][2];   /* [hip|ads][min|max] mdeg/s */
-    int32_t center[2];                          /* [hip|ads] deg/s^2 */
-    int32_t reduced_percent[2];                 /* native reduced-kick [hip|ads] */
-    uint32_t fire_msec;
-} recoil_weapon_kick_t;
-
-typedef struct {                    /* inputs for one stretch of recovery */
-    uint32_t weapon;                /* 0 = none */
-    const recoil_weapon_kick_t *def;
-    uint8_t ads_half, alive;
-} recoil_step_t;
-
-typedef struct {                    /* one accepted shot */
-    uint32_t time, shooter, index, weapon;
-    const recoil_weapon_kick_t *def;
-    uint16_t ads_frac;              /* fWeaponPosFrac quantised to 1/10000; native uses == 10000 */
-    uint8_t reduced;                /* weaponRestrictKickTime > 0 */
-} recoil_shot_t;
-
-typedef struct {
-    recoil_kick_t view;             /* impulse velocity the shot sets */
-    uint32_t gun_scale;             /* basis points applied to native gun kick */
-} recoil_shot_result_t;
-
-typedef struct recoil_model {
-    uint8_t id; const char *name;
-    uint8_t params;                 /* per-weapon integers on the wire */
-    int  (*validate)(const int32_t *param);
-    /* Adjust the native result (scale, replace, add) and update model_state. */
-    void (*shot)(recoil_sim_t *, const int32_t *param, const recoil_shot_t *, recoil_shot_result_t *);
-    /* Optional: replace one 5 ms recovery slice; NULL = Recoil_NativeStep. */
-    void (*step)(recoil_sim_t *, const int32_t *param, const recoil_step_t *);
-} recoil_model_t;
-```
+The types and the model interface live in `src/recoil/sim.h`; the guide to them is
+[recoil-models.md](recoil-models.md).
 
 - **Model 0 (native)** is never simulated and stays stock and trusted.
-- **Model 1 (continuous)** scales both the view impulse and the gun scale by today's `Recoil_Fire`
-  opening ramp, and resets the ramp on weapon change, keyed on the shot's `weapon`.
+- **Model 1 (continuous)** scales both the view impulse and the gun scale by the `Recoil_Fire` opening
+  ramp, converted from kick distance to impulse (`Recoil_DistanceScale`), and resets the ramp on weapon
+  change, keyed on the shot's `weapon`.
 - **Recovery** ignores `params` unless a model supplies `step`.
 - **Future spray patterns** are compiled tables inside their model file, selected by a per-weapon
   parameter (pattern ID). Tables must match bit for bit on both sides anyway, and the wire carries IDs,
@@ -166,17 +132,18 @@ typedef struct recoil_model {
 |---|---|---|
 | Client | `CL_FinishMove` (`cl_main.c:9570`), before the vehicle branch | Rebuild sim (committed + replay), advance to `cmd->serverTime` with predicted-ps inputs, fold `offset`, record it for command N |
 | Client | `CL_WritePacket` (`cl_main.c:4383`) | Authoritative mode only: copies with `angles -= offset`, explicit-angle base |
-| Client | SetCall `0x4476A3` (prediction `Pmove`) | Own player only: record pre-command step inputs and new fire events per command, keyed by raw command time |
+| Client | SetCall `0x4476A3` (prediction `Pmove`) | Own player only: record pre-command step inputs and new fire events per command, keyed by command time |
 | Client | hook `0x457D2E` (exists) | Sim active and own player: zero the native view kick, scale gun kick by the shot's `gun_scale` |
 | Client | `CL_ParseServerMessage` | `svc_recoil` updates the committed state |
 | Client | `cl_recoil.c` | Contract mode (native, authoritative, local fold). Resets only when the contract string changes, and on connect/disconnect. History lives in the module, not in `cl` |
-| Server | `SV_ClientThink` (`sv_client.c:3048`) | Active non-bot client with a non-native contract: reset/advance, fold into `cl->lastUsercmd` only (`cmds[i]` and the plugin event keep the aim-only wire value; demos record the folded `ps.viewangles`), and set the shot context (raw time, index 0) around `ClientThink` |
+| Server | `SV_ClientThink` (`sv_client.c:3048`) | Active non-bot client with a non-native contract: reset/advance, fold into `cl->lastUsercmd` only (`cmds[i]` and the plugin event keep the aim-only wire value; demos record the folded `ps.viewangles`), and set the shot context (game time) around `ClientThink` |
 | Server | `_g_active_mp.asm` `G_PlayerEvent` | Retarget its `call BG_WeaponFireRecoil` to `SV_Recoil_FireRecoil` (same cdecl signature): native call, then, in shot context, `Recoil_Shot` and gun kick × `gun_scale` |
-| Server | `SV_EndClientSnapshot` (`sv_snapshot.c:577`) | Before EOF, for capable clients: `svc_recoil` while the state is moving or changed in the last second, plus a 500 ms heartbeat |
-| Server | `sv_recoil.c` (exists) | Contract, capability gate, per-client sims, reset on connect |
+| Server | `SV_EndClientSnapshot` (`sv_snapshot.c:577`) | Before EOF, for capable clients: `svc_recoil` after each new shot, plus a 500 ms heartbeat |
+| Server | `sv_recoil.c` (exists) | Contract, capability gate, per-client sims, reset on world entry (`SV_ClientEnterWorld`) |
 
 Reset rules (server-authoritative; the client mirrors them and is corrected): the client is not a live
-player, the raw time goes backwards, a gap of more than 2000 ms while moving, connect, or a contract change.
+player, the command time goes backwards, a gap of more than 2000 ms while moving, world entry, or a contract
+change.
 
 ## 7. Contract and compatibility
 
@@ -213,7 +180,8 @@ player, the raw time goes backwards, a gap of more than 2000 ms while moving, co
   - model 1 ramp;
   - replay and correction equivalence (committed + records gives the same result as straight
     simulation).
-- `developer 1` on both sides logs `recoil: t=%u i=%u off=%d,%d,%d`. A local dedicated server with one
+- `developer 1` logs each shot (server `recoil: client %d t=%u shots=%u speed=...`, client
+  `recoil: t=%u shots=%u fold=...`), and the client logs each mismatched correction with both states. A local dedicated server with one
   client must produce matching logs and no corrections in a clean session.
 
 ## 10. Stages
@@ -243,7 +211,7 @@ player, the raw time goes backwards, a gap of more than 2000 ms while moving, co
 | 2 No correction | Added `svc_recoil` committed state plus client replay | `sv_snapshot.c:577-585`, `cl_main.c:7506-7540` |
 | 3 Different ps per step | Inputs are pre-command ps on both sides, and the Pmove wrapper re-records them every prediction pass. The correction covers server-only changes (script `takeWeapon`, death) | bin `0x452A4B`/`0x452A57`, `sv_client.c:3058` |
 | 4 Shot attribution | Shots are recorded by the prediction Pmove wrapper per command, never from `cg.predictedPlayerState`. Replays overwrite, so a shot can't count twice | bin `0x4476A3` (cdecl `Pmove(pmove_t*)`) |
-| 5 Clamped time | The raw command time is used on both sides, and the server captures it before `ClientThink` | `_g_active_mp.asm:1263-1276`, `sv_client.c:3053` |
+| 5 Clamped time | Revision 3: the server clamps the command time exactly as `ClientThink_real` does, before `ClientThink`. A legitimate client is inside the window, where both sides use its own time | `_g_active_mp.asm:1263-1276`, `sv_client.c:3053` |
 | 6 Reset asymmetry | The server defines resets (section 6), and the correction carries them. The client resets only on a contract-string change. History moves out of `cl` | `cl_main.c:8623`, fast `map_restart` keeps `svs.time` |
 | 7 Protocol bump | Dropped: the wire stays version 1, and the capability `cl_recoilProtocol` goes to 2 | no release tag contains `85ddf3e`/`e17505c` |
 | 8 Event cap | The server hook is the `G_PlayerEvent` call. Both sides read the same 4-slot ring | `_bg_misc.asm:2215-2240` |

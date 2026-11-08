@@ -20,7 +20,9 @@
 #define BG_WEAPON_FIRE_RECOIL 0x41a7b0
 #define PMOVE 0x414d10
 
-enum { MAX_EVENTS = 4 };
+/* The fire-event ring the hook reads must be the player state's own (engine.h, BG_AddPredictableEventToPlayerstate). */
+_Static_assert(ARRAY_LEN(((playerState_t *)0)->events) == RECOIL_PS_EVENTS, "playerState_t.events ring size");
+
 typedef enum { RECOIL_MODE_NATIVE, RECOIL_MODE_LOCAL, RECOIL_MODE_AUTHORITATIVE } recoil_mode_t;
 
 typedef struct { playerState_t *ps; usercmd_t cmd; } pmove_head_t; /* leading pmove_t fields */
@@ -28,7 +30,7 @@ typedef struct {
     int cmd;                    /* command number; another value = empty slot */
     uint32_t time;              /* raw usercmd time */
     recoil_step_t step;         /* player state before the command (def resolved on replay) */
-    recoil_shot_t shot[MAX_EVENTS]; /* fire events after the command (time, index, def set on replay) */
+    recoil_shot_t shot[RECOIL_PS_EVENTS]; /* fire events after the command (time, shooter, def set on replay) */
     unsigned shots;
     int32_t fold[RECOIL_AXES];  /* the offset added to this command; immutable once sent */
 } recoil_record_t;
@@ -102,7 +104,6 @@ static uint32_t Apply(recoil_sim_t *sim, const recoil_record_t *r, unsigned shot
         recoil_shot_t shot = r->shot[i];
         shot.time = r->time;
         shot.shooter = (uint32_t)cg.clientNum;
-        shot.index = i;
         if ((shot.def = WeaponKick(shot.weapon, &param))) scale = Recoil_Shot(sim, model, param, &shot).gun_scale;
     }
     return scale;
@@ -133,7 +134,7 @@ static recoil_sim_t Predict(int through)
     if (through - cmd > CMD_BACKUP) cmd = through - CMD_BACKUP;
     while (cmd < through) {
         const recoil_record_t *r = Record(++cmd);
-        if (r) Apply(&sim, r, MAX_EVENTS);
+        if (r) Apply(&sim, r, RECOIL_PS_EVENTS);
     }
     return sim;
 }
@@ -152,7 +153,11 @@ static void Commit(void)
             ++corrections.compared;
             if (memcmp(&predicted, &correction.sim, sizeof(predicted))) {
                 ++corrections.mismatched;
-                Com_DPrintf(CON_CHANNEL_CLIENT, "recoil: corrected at t=%u\n", r->time);
+                Com_DPrintf(CON_CHANNEL_CLIENT,
+                    "recoil: corrected at t=%u shots=%u/%u angle=%d,%d/%d,%d speed=%d,%d/%d,%d (predicted/server)\n",
+                    r->time, predicted.shots, correction.sim.shots, predicted.kick.angle[0], predicted.kick.angle[1],
+                    correction.sim.kick.angle[0], correction.sim.kick.angle[1], predicted.kick.speed[0],
+                    predicted.kick.speed[1], correction.sim.kick.speed[0], correction.sim.kick.speed[1]);
             }
         }
         base.sim = correction.sim;
@@ -163,7 +168,7 @@ static void Commit(void)
     while (base.cmd < cl.cmdNumber) {
         if ((r = Record(base.cmd + 1))) {
             if ((int)(r->time - (uint32_t)cl.snap.ps.commandTime) > 0) break;
-            Apply(&base.sim, r, MAX_EVENTS);
+            Apply(&base.sim, r, RECOIL_PS_EVENTS);
             if (r->shots)
                 Com_DPrintf(CON_CHANNEL_CLIENT, "recoil: t=%u shots=%u fold=%d,%d,%d speed=%d,%d,%d\n", r->time,
                     r->shots, r->fold[0], r->fold[1], r->fold[2], base.sim.kick.speed[0], base.sim.kick.speed[1],
@@ -229,16 +234,15 @@ void CL_Recoil_PredictPmove(pmove_head_t *pm, int number)
     recoil_record_t *r = &records[number & CMD_MASK];
     const qboolean tracked = mode != RECOIL_MODE_NATIVE && r->cmd == number &&
         r->time == (uint32_t)pm->cmd.serverTime && Recoil_OwnPlayer(ps->otherFlags);
-    int sequence;
+    int i;
     if (tracked)
         r->step = Recoil_SampleStep(ps->weapFlags, ps->offHandIndex, ps->weapon, ps->fWeaponPosFrac, ps->pm_type,
             ps->otherFlags);
     ((void (__cdecl *)(pmove_head_t *))PMOVE)(pm);
     if (!tracked || !Recoil_OwnPlayer(ps->otherFlags)) return;
     r->shots = 0;
-    sequence = ps->eventSequence - before > MAX_EVENTS ? ps->eventSequence - MAX_EVENTS : before;
-    for (; sequence != ps->eventSequence; ++sequence)
-        if (Recoil_FireEvent(ps->events[sequence & (MAX_EVENTS - 1)]))
+    for (i = Recoil_NewEvents(before, ps->eventSequence); i > 0; --i)
+        if (Recoil_FireEvent(ps->events[(ps->eventSequence - i) & (RECOIL_PS_EVENTS - 1)]))
             r->shot[r->shots++] = Recoil_SampleShot(ps->weapFlags, ps->offHandIndex, ps->weapon, ps->fWeaponPosFrac,
                 ps->weaponRestrictKickTime);
 }
@@ -315,8 +319,8 @@ void CL_Recoil_Clear(void)
 static void CL_Recoil_Status_f(void)
 {
     static const char *modes[] = {"native", "local (listen server)", "server-authoritative"};
-    Com_Printf(CON_CHANNEL_DONT_FILTER, "recoil: mode=%s model=%u hooked=%d base=%d t=%u kick=%d,%d,%d\n",
-        modes[mode], active.model, hooked, base.cmd, base.sim.time,
+    Com_Printf(CON_CHANNEL_DONT_FILTER, "recoil: mode=%s model=%u hooked=%d base=%d t=%u shots=%u kick=%d,%d,%d\n",
+        modes[mode], active.model, hooked, base.cmd, base.sim.time, base.sim.shots,
         base.sim.kick.angle[0], base.sim.kick.angle[1], base.sim.kick.angle[2]);
     Com_Printf(CON_CHANNEL_DONT_FILTER, "recoil: corrections received=%u compared=%u mismatched=%u last t=%u\n",
         corrections.received, corrections.compared, corrections.mismatched, correction.sim.time);

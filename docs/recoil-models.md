@@ -9,7 +9,7 @@ and review answers: [authoritative-recoil.md](authoritative-recoil.md);
 Model IDs are permanent:
 
 - **0/native** is stock CoD4. It is never simulated, and stock clients may play.
-- **1/continuous** is the opening ramp: each burst starts at `opening` of the native kick and reaches
+- **1/continuous** is the opening ramp: each burst starts at `opening` of the native kick distance and reaches
   full strength on shot `full_shot`.
 
 ## Code layout
@@ -45,9 +45,9 @@ The script also generates the Python tooling's `recoil_constants.py`.
 4. Add tests to `tests/test_recoil.c`, run `tools/sync-recoil.py`, and build both engines.
 
 The engine glue does not change. Everything a model reads is in `recoil_shot_t` and `recoil_step_t`:
-- the raw usercmd time;
+- the usercmd time (the server clamps it to game time);
 - the shooter;
-- the shot's index within the command;
+- the shot number: the simulation's count of shots, which picks the native roll;
 - the weapon and its fixed-point WeaponDef kick data;
 - full and half ADS;
 - the native reduced-kick window;
@@ -55,6 +55,9 @@ The engine glue does not change. Everything a model reads is in `recoil_shot_t` 
 
 Any arithmetic must be integer, so both builds agree. The tests assert golden values under both compiler
 settings.
+
+Randomness must not depend on anything the client chooses. The command time is the client's choice: a
+modified client can hold a shot back a few ms to pick its roll. Hash the shot number instead (`Recoil_Hash`).
 
 ## Contract
 
@@ -84,4 +87,7 @@ itself and folds the kick into the wire ("local mode"). Other players on a liste
 - **In game, dedicated server:** a local `cod4x18_dedrun.exe` with model 1 and a test client. About 31
   server-simulated shots. The client received 125 corrections, compared 124 with its own prediction,
   and all matched exactly (`cl_recoilStatus`).
-- **Not verified:** feel in a match, multiple players, packet loss.
+- **At 100 Hz (revision 3):** 84 shots, 134 corrections compared, 0 mismatched without lag. With 150 ms
+  ping, jitter and 2% loss: 1 mismatch in 113 corrections, a firing command the server never received,
+  repaired by the next correction (facts file).
+- **Not verified:** feel in a match, multiple players.

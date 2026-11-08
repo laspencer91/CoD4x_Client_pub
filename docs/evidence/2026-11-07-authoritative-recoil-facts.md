@@ -187,8 +187,92 @@ identical to the float port at 5 ms frames, and the same at every frame rate.
   corrections received, 124 compared with the client's own prediction, and 0 mismatched.
 - **Correction rate.** After the send-condition fix (only the kick and model state count as a change),
   corrections fell from one per snapshot to 125 over the session.
+- **Server frame rate.** This test ran at the default `sv_fps 20`. The PromodFlex release config runs
+  `sv_fps 100`, `sv_minSnaps 100` and rate 100000 (`cod4-promod/release/promodflex/pmflex-server.cfg`), so each
+  client gets up to 100 snapshots a second. A correction can ride on every one while the kick moves: 61 bytes x
+  100 = about 6.1 KB/s. The simulation itself does not depend on the server frame rate, because it steps on
+  command time. Revision 3 sends one correction per shot instead (see below).
+- **100 Hz, revision 3 (shot count, per-shot corrections, game-time clamp).** `sv_fps 100`, `sv_minSnaps 100`,
+  rate 100000, AK-74u sprays.
+  - No added lag: 84 shots on both sides; 134 corrections compared, 0 mismatched.
+  - Through a UDP relay with 40 ms each way, 0-10 ms jitter and 2% loss both ways (about 2% of packets
+    dropped each way, measured): two runs, 45 and 60 shots with equal counts on both sides; 114 and 117
+    corrections compared, 2 mismatched in each. Every mismatch sat on a server shot command with the same
+    shot count: the client's speeds equal the server's plus about two 5 ms recovery slices, so the client
+    fired the same roll about one command earlier than the server. The correction snapped the view by about
+    0.08 deg. Cause: lost commands (below).
 - **Environment notes.**
   - This machine has no CoD4 Key Code in the registry. Test builds (`COD4X_TEST_ISOLATION`) generate
     a session-only key in memory.
   - Promod's `servercheck.gsc` forces `sv_pure 1` unless `sv_cheats` is on.
   - `sv_pure` registers after config execution, so set it with rcon after startup.
+- **Recoil bug found in play: 2.6 s client freezes while running (fixed).** `CL_Recoil_PredictPmove` read
+  the fire events a Pmove added with `for (seq = before; seq != after; ++seq)`. The event counter is 8 bits:
+  `BG_AddPredictableEventToPlayerstate` stores `(eventSequence + 1) & 0xff` (server `_bg_misc.asm:2847`). At
+  the wrap (255 to 0) the loop walked about 4.3 billion values, freezing the main thread for about 2.6 s, once
+  for each prediction pass that replayed that command. Footsteps reach the wrap every few yards of running.
+  - **How it was found.** The server logged a flood of "Delta request from out of date packet": the client's
+    acknowledgement was stuck for about 290 snapshots. A relay that logs silences showed the client sending
+    nothing for 2.63-2.70 s while the server kept sending. A gdb sample of the main thread showed it in the
+    hook's event loop (DLL `0x64d1bc39`) with the loop counter at about 32 million.
+  - **Fix.** `Recoil_NewEvents` (`engine.h`) counts new events modulo 256 and caps them at the 4-slot ring;
+    tests cover the wrap.
+- **The opening scaled speed, not distance (fixed).** The native kick is an impulse; recovery pulls back at a
+  constant rate (`CG_KickAngles`; gun kick in `BG_CalculateWeaponPosition_GunRecoil_SingleAngle`, plus drag), so
+  the distance grows with the square of the impulse. Model 1 scaled the impulse by the opening, so 35% moved the
+  aim about 12% as far and the kick was back to zero within about 80 ms, before the AK-47's next shot (fire time
+  85 ms, `weapons/mp/ak47_mp`): the second bullet landed on the first. Aim offset when shot 2 fires, averaged
+  over the AK-47's roll range: 0.00 deg at 35% of the speed, 0.12 deg (largest 0.50) at 35% of the distance, 0.57
+  deg (largest 1.79) at stock. `Recoil_DistanceScale` (integer square root) turns the ramp's distance share into
+  the impulse share; a 35% opening now peaks at 38% of stock's 1.35 deg (the first 5 ms slice adds a little).
+- **A stale server object made every shot disagree (build fixed).** After the distance change, 14 of 82
+  corrections mismatched: the client's kick was exactly 1.414x the server's on a burst's first shot (sqrt 0.5 vs
+  0.5) and 1.225x on the second. The change touched only the shared headers, and the server makefile had no
+  header dependencies, so `obj/sv_recoil.o` kept the old model. The makefile now compiles with `-MMD -MP` and
+  reads `obj/*.d`; touching `src/recoil/sim.h` rebuilds `sv_recoil.o`. Rebuilt: 1 of 113 mismatched.
+- **Remaining mismatches are lost commands.** With 150 ms ping, jitter and 2% loss, and the client's
+  `cl_packetdup 0` (each command sent once), about one shot in 30 disagreed. Each had the same shot count and
+  roll, with the client's kick exactly one or two 5 ms recovery slices ahead: the server never received the
+  firing command and ran the shot in the next one. The next correction repairs it. Inferred from the values, not
+  yet confirmed by repeating with `cl_packetdup 1`.
+- **Every round repeated the same rolls (fixed).** `SV_ClientEnterWorld` runs at every round's restart and
+  started the shot count at 0, so the n-th shot of every round had the same roll (the server log showed the same
+  first-shot kick 14 times). The count now starts at a random value (`Com_RandomBytes`); the client learns it
+  from the first correction, sent at once after entry.
+- **Engine bug found while testing at 100 Hz (fixed in `CoD4x_Server/src/sv_main.c`).** Under `+devmap`, a
+  Promod script calls `map_restart(false)` at level time 110 ms, during the three settle frames
+  `SV_SpawnServer` runs inside the load frame (10 ms each at 100 Hz). `GScr_MapRestart` sets the level's
+  restart flag (`level+0x2ddc` = 1) and queues `fast_restart`, which runs in the same engine frame.
+  `SV_MapRestart` then returned silently (`com_frameTime == sv.start_frameTime`), so the flag stayed set and
+  the round end's `map_restart(true)` at 119.5 s failed with "map_restart already called". That error is
+  fatal with `developer 1`; with `developer 0` it would end the script thread and the round would never
+  restart. Logged with temporary instrumentation. The fix defers such a restart to the next frame
+  (`sv_deferredFastRestart`).
+
+## Fixed: the client chose one hash input and the recovery clock (found 2026-11-07, inferred, not exploited)
+
+- **The roll depends on the command time.** `Recoil_Hash` mixes the shooter, the raw usercmd `serverTime`,
+  the shot index and the weapon (`src/recoil/sim.h:77-84`). The server takes `shot.time` from that raw time
+  (`sv_recoil.c`, `SV_Recoil_FireRecoil`).
+- **The client picks that time.** The server accepts any increasing command time: `SV_UserMove` drops only
+  stale or out-of-order commands (`sv_client.c:1111-1120`), and `ClientThink_real` clamps to
+  `[level.time-1000, level.time+200]`.
+- **Inferred exploit.** A modified client could hold back the command that fires for a few ms and send it
+  at whichever time gives the smallest pitch roll. The hash is public and cheap. With AK-47 pitch -30..60,
+  the best of 5 rolls averages about -15 against a fair mean of +15, so the kick would point down. The cost
+  in fire rate has not been measured.
+- **Fix (revision 3).** `Recoil_Hash` mixes the shooter, the shot number and the weapon. The shot number
+  is `recoil_sim_t.shots`: `Recoil_Shot` assigns it, `Recoil_Reset` keeps it, and `svc_recoil` carries it
+  (16 words). `SV_ClientEnterWorld` starts each client at a random shot count (below), which the first
+  correction carries to the client.
+  Knowing upcoming rolls does not help, because skipping a shot does not change them. The only choice left
+  is to spend a bad roll on a wasted shot, which costs ammo and noise.
+- **Second time input: the recovery clock.** Recovery and the model-1 ramp read the command time. The game
+  clamps it to `[level.time - 1000, level.time + 200]` (`_g_active_mp.asm`, `ClientThink_real_10`:
+  `level+0x1ec` is `level.time`, `g_shared.h:126`), but the simulation used the raw value, and
+  `SV_ClientThink` accepts commands up to 20 s ahead (`sv_client.c:3052`). A client could therefore run its
+  command clock fast during a spray and buy extra recovery. The server now applies the same clamp
+  (`SV_RecoilGameTime`), so recoil follows game time; legitimate clients are inside the window.
+- **Correction policy.** Only shots add information the client cannot predict, so the server sends
+  `svc_recoil` once after each new shot, plus the 500 ms heartbeat, instead of every snapshot while the
+  kick moves. At 100 Hz that is about one per shot instead of 100 a second.

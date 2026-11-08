@@ -25,6 +25,7 @@ private:
     };
     std::mutex mutex;
     IDirect3DDevice9* current_device = nullptr; // Borrowed; engine owns the device.
+    IDirect3DStateBlock9* state_block = nullptr; // saved and restored around each frame
     std::unordered_map<const Geometry*, GpuGeometry> geometries;
     std::unordered_map<const Texture*, GpuTexture> textures;
     rml_stats_t stats = {};

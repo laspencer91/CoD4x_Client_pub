@@ -9,12 +9,12 @@ template<class T> void Release(T*& p) { if (p) { p->Release(); p = nullptr; } }
 struct Vertex { float x, y, z; D3DCOLOR color; float u, v; };
 constexpr DWORD VertexFormat = D3DFVF_XYZ | D3DFVF_DIFFUSE | D3DFVF_TEX1;
 
-// State blocks do not include render targets, and transform restoration is explicit.
+// State blocks do not include render targets, and transform restoration is explicit. The renderer keeps one
+// state block per device and re-captures it each frame; creating one is far more expensive.
 class SavedState {
 public:
-    explicit SavedState(IDirect3DDevice9* value) : device(value) {
-        result = device->CreateStateBlock(D3DSBT_ALL, &block);
-        if (FAILED(result)) return;
+    SavedState(IDirect3DDevice9* value, IDirect3DStateBlock9*& cached) : device(value), block(cached) {
+        if (!block && FAILED(result = device->CreateStateBlock(D3DSBT_ALL, &block))) { block = nullptr; return; }
         result = block->Capture();
         if (FAILED(result)) return;
         device->GetRenderTarget(0, &target);
@@ -37,12 +37,12 @@ public:
             device->SetViewport(&viewport);
             device->SetScissorRect(&scissor);
         }
-        Release(block); Release(target); Release(depth);
+        Release(target); Release(depth);
     }
     HRESULT result = E_FAIL;
 private:
     IDirect3DDevice9* device;
-    IDirect3DStateBlock9* block = nullptr;
+    IDirect3DStateBlock9*& block;
     IDirect3DSurface9* target = nullptr;
     IDirect3DSurface9* depth = nullptr;
     D3DVIEWPORT9 viewport = {};
@@ -57,6 +57,7 @@ D3D9Renderer::~D3D9Renderer() { DeviceLost(); }
 void D3D9Renderer::Clear() {
     for (auto& entry : geometries) { Release(entry.second.vertices); Release(entry.second.indices); }
     for (auto& entry : textures) Release(entry.second.texture);
+    Release(state_block); // a state block must be released before the device resets
     geometries.clear(); textures.clear(); current_device = nullptr;
 }
 
@@ -153,7 +154,7 @@ HRESULT D3D9Renderer::Render(IDirect3DDevice9* device, const Frame& frame) {
     std::lock_guard<std::mutex> lock(mutex);
     if (!device || frame.width <= 0 || frame.height <= 0) return E_INVALIDARG;
     if (device != current_device) { Clear(); current_device = device; }
-    SavedState saved(device);
+    SavedState saved(device, state_block);
     if (FAILED(saved.result)) return stats.last_render_result = saved.result;
     Collect();
     D3DVIEWPORT9 viewport = {0, 0, DWORD(frame.width), DWORD(frame.height), 0, 1};

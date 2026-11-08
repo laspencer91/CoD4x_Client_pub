@@ -15,7 +15,7 @@
 #include <map>
 
 namespace {
-bool fixture = true, missing_document = false;
+bool fixture = true, missing_document = false, missing_fonts = false;
 int warnings = 0, hover_sounds = 0, click_sounds = 0;
 std::map<std::string,std::string> economy_values;
 std::vector<std::string> economy_requests;
@@ -38,6 +38,7 @@ void Check(HRESULT result, const char* label) {
 int ReadFile(const char* path, void** buffer) {
     *buffer = nullptr;
     if (missing_document && std::strcmp(path, "ui/rml/diagnostic.rml") == 0) return -1;
+    if (missing_fonts && std::strncmp(path, "ui/rml/fonts/", 13) == 0) return -1;
     if (std::strcmp(path, "ui/rml/images/probe.tga") == 0) {
         // Top-left red, top-right green, bottom-left blue, bottom-right white.
         const unsigned char tga[] = {0,0,2,0,0,0,0,0,0,0,0,0,2,0,2,0,32,0x28,
@@ -377,6 +378,10 @@ int main(int argc, char** argv) {
             "attachment control submits its own action without opening the card picker");
         RmlHost_Key(RML_KEY_SPACE,1,0); RmlHost_Key(RML_KEY_SPACE,0,0);
         Require(economy_requests.back()=="deploy", "Space uses the existing deploy response");
+        const auto before_hold=economy_requests.size();
+        for (int repeat=0; repeat<4; ++repeat) RmlHost_Key(RML_KEY_SPACE,1,0); // Windows autorepeat while held
+        RmlHost_Key(RML_KEY_SPACE,0,0);
+        Require(economy_requests.size()==before_hold+1, "a held hotkey acts once, not on every repeat");
         Require(RmlHost_Open(RML_SCREEN_PALETTE), "switch from letterboxed economy to palette"); gpu.Render(12.0);
         Require(Rml::GetContext("cod4x")->GetDensityIndependentPixelRatio() == 1.f, "palette restores its own authoring density");
         Require(RmlHost_Open(RML_SCREEN_ECONOMY), "switch back to the live economy"); gpu.Render(13.0);
@@ -692,6 +697,10 @@ int main(int argc, char** argv) {
     Check(D3DXSaveSurfaceToFileA(RML_TEST_OUTPUT "/rml-palette.png", D3DXIFF_PNG, gpu.surface, nullptr, nullptr), "save native palette capture");
     Require(warnings <= 2, "diagnostic styles produce no unexpected RmlUi warnings");
     RmlHost_Shutdown(); Require(RmlHost_Init(&host), "runtime can initialize again after shutdown"); RmlHost_Shutdown();
+    missing_fonts = true;
+    Require(RmlHost_Init(&host), "a mod package without the base font still starts the runtime");
+    Require(!RmlHost_Open(RML_SCREEN_ECONOMY_PREVIEW), "the economy screen waits for its fonts");
+    RmlHost_Shutdown(); missing_fonts = false;
     std::printf("RML_NATIVE_CHECKS_PASSED\n");
     return 0;
 }

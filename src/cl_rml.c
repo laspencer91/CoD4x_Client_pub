@@ -30,6 +30,7 @@ static int rml_scores_server_id = -1; /* map load (cl.serverId) whose team score
 static qboolean rml_follow_drawn;
 static Material *rml_cursor;
 static int rml_cursor_x, rml_cursor_y;
+static int rml_other_thread_frames; /* screen updates from the render thread during loads, which RML skips */
 #ifdef COD4X_TEST_ISOLATION
 static int rml_test_x = -1, rml_test_y, rml_test_button, rml_test_deadline;
 static void CL_Rml_TestClick_f(void)
@@ -280,6 +281,8 @@ static void CL_Rml_Status_f(void)
         stats.visible, stats.recorded_frames, stats.rendered_frames, stats.draw_calls,
         stats.geometry_uploads, stats.texture_uploads, stats.pending_frames, (unsigned)stats.last_render_result,
         stats.source_reloads, stats.source_failures, stats.activations);
+    Com_Printf(CON_CHANNEL_DONT_FILTER, "RmlUi cost: record=%uus render=%uus per frame; skipped %d render-thread screen updates\n",
+        stats.record_us, stats.render_us, rml_other_thread_frames);
     Com_Printf(CON_CHANNEL_UI,"RmlUi broadcast: ready=%d drawn=%d captured=%d hud=%d team=%s allies=%d axis=%d end=%d time=%d cards=%d\n",
         RmlHost_BroadcastReady(),Cvar_GetInt("ui_rml_broadcast_drawn"),rml_captured,Cvar_GetInt("ui_rml_hud"),CL_Rml_Value("rml_local_team"),
         cg.teamScores[2],cg.teamScores[1],cgs.gameEndTime,cg.time,rml_cards->integer);
@@ -324,6 +327,10 @@ void CL_Rml_Frame(void)
 {
     uint32_t ticket;
     int queued;
+    /* During a load the render thread also runs the engine's screen update (iw3mp 0x6158A0 -> SCR_UpdateScreen
+     * 0x475120 -> Scr_UpdateFrame) while the main thread loads. RML sets cvars, runs menu scripts and drives
+     * RmlUi, all of which belong to the main thread. */
+    if (!Sys_IsMainThread()) { ++rml_other_thread_frames; return; }
 #ifdef COD4X_TEST_ISOLATION
     if (rml_test_x >= 0) {
         if (Sys_Milliseconds() > rml_test_deadline) { rml_test_x=-1; CL_Rml_Log("test click expired waiting for an eligible native economy menu"); }

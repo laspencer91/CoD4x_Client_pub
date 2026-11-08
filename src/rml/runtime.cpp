@@ -14,6 +14,8 @@
 #include "native_keys.h"
 #include <RmlUi/Core.h>
 #include <algorithm>
+#include <bitset>
+#include <chrono>
 #include <cstring>
 #include <map>
 #include <mutex>
@@ -29,9 +31,9 @@ EconomyView economy;
 BroadcastView broadcast;
 bool broadcast_enabled=false, broadcast_ready=false;
 bool economy_screen = false, economy_preview = false;
-bool game_fonts_loaded = false;
-bool game_font_loaded[3] = {};
-double game_fonts_retry_at = 0;
+bool fonts_loaded = false;
+bool font_loaded[4] = {};
+double fonts_retry_at = 0;
 uint32_t source_reloads = 0, source_failures = 0;
 
 class System final : public Rml::SystemInterface {
@@ -100,6 +102,7 @@ Rml::DataModelHandle model;
 bool initialized = false, visible = false, want_close = false;
 bool want_replay = false;
 std::set<Rml::Input::KeyIdentifier> pressed_keys;
+std::bitset<256> held_keys; // native keys whose key-down arrived; Windows repeats a held key's key-down
 bool pressed_buttons[5] = {};
 int activations = 0;
 bool toggle_demo = false;
@@ -108,6 +111,16 @@ UiAudio palette_audio;
 std::mutex frames_mutex;
 std::map<uint32_t, std::shared_ptr<const Frame>> frames;
 uint32_t next_ticket = 1, recorded_frames = 0;
+// Average cost per frame since rml_status last asked: recording (main thread) and drawing (render thread, under
+// frames_mutex).
+struct FrameCost {
+    double total = 0; uint32_t count = 0;
+    void Add(std::chrono::steady_clock::time_point started) {
+        total += std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - started).count(); ++count;
+    }
+    uint32_t Take() { const uint32_t average = count ? uint32_t(total / count + .5) : 0; total = 0; count = 0; return average; }
+};
+FrameCost record_cost, render_cost;
 
 Rml::Element* Control(Rml::Element* element) {
     while (element && !(element->GetTagName() == "input" && element->GetAttribute<Rml::String>("type", "") == "button"))
@@ -196,23 +209,36 @@ Rml::Input::KeyIdentifier TranslateKey(int key) {
 using namespace cod4x::rml;
 
 namespace {
-bool LoadGameFonts() {
-    if (game_fonts_loaded) return true;
-    // Missing fonts (a mod without rml_shared.iwd) are retried every few seconds, not every frame, and a face that
-    // already loaded is never registered twice.
+// The fonts come from the mod: the base font in rml_shared.iwd, the game fonts in pmflex.iwd. Missing ones (a mod
+// package without them) are retried every few seconds, not every frame, by the screens that need them; a face that
+// already loaded is never registered twice.
+constexpr const char* kBaseFont = "ui/rml/fonts/SourceSansPro-Regular.otf";
+bool LoadFonts() {
+    if (fonts_loaded) return true;
     const double now = Rml::GetSystemInterface()->GetElapsedTime();
-    if (now < game_fonts_retry_at) return false;
+    if (now < fonts_retry_at) return false;
     const struct { const char* path; Rml::Style::FontWeight weight; } fonts[] = {
+        {kBaseFont, Rml::Style::FontWeight::Auto},
         {"ui/rml/fonts/SairaCondensed-Regular.ttf", Rml::Style::FontWeight::Auto},
         {"ui/rml/fonts/SairaCondensed-SemiBold.ttf", Rml::Style::FontWeight::Bold},
         {"ui/rml/fonts/ShareTechMono-Regular.ttf", Rml::Style::FontWeight::Auto}};
-    game_fonts_loaded = true;
-    for (int i = 0; i < 3; ++i) {
-        if (!game_font_loaded[i]) game_font_loaded[i] = Rml::LoadFontFace(fonts[i].path, false, fonts[i].weight);
-        game_fonts_loaded = game_fonts_loaded && game_font_loaded[i];
+    fonts_loaded = true;
+    for (int i = 0; i < 4; ++i) {
+        if (!font_loaded[i]) font_loaded[i] = Rml::LoadFontFace(fonts[i].path, false, fonts[i].weight);
+        fonts_loaded = fonts_loaded && font_loaded[i];
     }
-    if (!game_fonts_loaded) game_fonts_retry_at = now + 5;
-    return game_fonts_loaded;
+    if (!fonts_loaded) fonts_retry_at = now + 5;
+    return fonts_loaded;
+}
+// Only navigation and editing keys act on a held key's repeated key-downs. A held hotkey, Enter or Space (which
+// RmlUi turns into a click) acts once, so holding X cannot buy and refund a frag over and over.
+bool RepeatAllowed(int key) {
+    using namespace Rml::Input;
+    switch (TranslateKey(key)) {
+    case KI_UP: case KI_DOWN: case KI_LEFT: case KI_RIGHT: case KI_PRIOR: case KI_NEXT: case KI_BACK: case KI_DELETE: case KI_TAB:
+        return true;
+    default: return false;
+    }
 }
 }
 extern "C" void RmlHost_EnableBroadcast(int enabled) { broadcast_enabled=enabled!=0; if (!enabled) broadcast_ready=false; }
@@ -239,7 +265,8 @@ extern "C" int RmlHost_Init(const rml_host_t* services) {
     constructor.Bind("toggle_demo", &toggle_demo);
     model = constructor.GetModelHandle();
     economy.Init(context);
-    if (!Rml::LoadFontFace("ui/rml/fonts/SourceSansPro-Regular.otf")) { RmlHost_Shutdown(); return 0; }
+    // A missing base font never fails startup: LoadFonts retries it for the economy screens and the HUD.
+    font_loaded[0] = Rml::LoadFontFace(kBaseFont);
     return 1;
 }
 
@@ -254,8 +281,8 @@ extern "C" void RmlHost_Shutdown() {
     context = nullptr; document = nullptr; initialized = false; model = {};
     document_path = "ui/rml/diagnostic.rml"; want_replay = false;
     economy_screen = economy_preview = false;
-    game_fonts_loaded = false; game_fonts_retry_at = 0;
-    for (bool& loaded : game_font_loaded) loaded = false;
+    fonts_loaded = false; fonts_retry_at = 0;
+    for (bool& loaded : font_loaded) loaded = false;
 }
 
 extern "C" int RmlHost_Show() {
@@ -281,7 +308,7 @@ extern "C" void RmlHost_ClearInput() {
         for (auto key : pressed_keys) context->ProcessKeyUp(key, 0);
         for (int button = 0; button < 5; ++button) if (pressed_buttons[button]) context->ProcessMouseButtonUp(button, 0);
     }
-    pressed_keys.clear(); std::fill(std::begin(pressed_buttons), std::end(pressed_buttons), false);
+    pressed_keys.clear(); held_keys.reset(); std::fill(std::begin(pressed_buttons), std::end(pressed_buttons), false);
     palette_audio.Leave();
 }
 extern "C" void RmlHost_Hide() {
@@ -324,7 +351,7 @@ extern "C" int RmlHost_Open(rml_screen_t screen) {
     else if (screen == RML_SCREEN_PALETTE) path = "ui/rml/palette.rml";
     else if (screen == RML_SCREEN_ECONOMY || screen == RML_SCREEN_ECONOMY_PREVIEW) path = "ui/rml/economy.rml";
     else return 0;
-    if ((screen == RML_SCREEN_ECONOMY || screen == RML_SCREEN_ECONOMY_PREVIEW) && !LoadGameFonts()) return 0;
+    if ((screen == RML_SCREEN_ECONOMY || screen == RML_SCREEN_ECONOMY_PREVIEW) && !LoadFonts()) return 0;
     const bool previous_economy = economy_screen, previous_preview = economy_preview;
     economy_screen = screen == RML_SCREEN_ECONOMY || screen == RML_SCREEN_ECONOMY_PREVIEW;
     economy_preview = screen == RML_SCREEN_ECONOMY_PREVIEW;
@@ -362,6 +389,11 @@ extern "C" void RmlHost_FocusLost() { RmlHost_Hide(); }
 
 extern "C" void RmlHost_Key(int key, int down, int modifiers) {
     if (!RmlHost_Visible()) return;
+    if (key >= 0 && key < int(held_keys.size())) {
+        const bool repeat = down && held_keys[key];
+        held_keys[key] = down != 0;
+        if (repeat && !RepeatAllowed(key)) return;
+    }
     if (economy_screen && down && economy.Shortcut(key, host, economy_preview, now)) return;
     if (key == RML_KEY_ESCAPE && down) {
         if (economy_screen && !economy_preview && host.menu_response) host.menu_response("close");
@@ -385,6 +417,7 @@ extern "C" void RmlHost_Key(int key, int down, int modifiers) {
 }
 
 extern "C" uint32_t RmlHost_Record(int width, int height, double seconds) {
+    const auto started = std::chrono::steady_clock::now();
     if (want_close) RmlHost_Hide();
     if ((!visible && !broadcast_enabled) || !context || width <= 0 || height <= 0 || width > 8192 || height > 8192) return 0;
     now = std::max(now, seconds);
@@ -394,7 +427,7 @@ extern "C" uint32_t RmlHost_Record(int width, int height, double seconds) {
         if (RmlHost_Reload()) { ++source_reloads; if (host.log) host.log("source reloaded"); }
         else { ++source_failures; if (host.log) host.log("source reload failed; previous document retained"); }
     }
-    broadcast_ready=broadcast_enabled && LoadGameFonts() && broadcast.Prepare(host,width,height,now);
+    broadcast_ready=broadcast_enabled && LoadFonts() && broadcast.Prepare(host,width,height,now);
     if (!visible && !broadcast_ready) return 0;
     if (visible && economy_screen) economy.Update(host, economy_preview, now);
     if (visible) {
@@ -414,6 +447,7 @@ extern "C" uint32_t RmlHost_Record(int width, int height, double seconds) {
     uint32_t ticket = next_ticket++;
     if (!ticket) ticket = next_ticket++;
     frames.emplace(ticket, std::move(frame)); ++recorded_frames;
+    record_cost.Add(started);
     return ticket;
 }
 extern "C" void RmlHost_Discard(uint32_t ticket) { std::lock_guard<std::mutex> lock(frames_mutex); frames.erase(ticket); }
@@ -422,7 +456,10 @@ extern "C" int32_t RmlHost_Render(void* device, uint32_t ticket) {
     { std::lock_guard<std::mutex> lock(frames_mutex);
       auto found = frames.find(ticket); if (found == frames.end()) return S_FALSE;
       frame = std::move(found->second); frames.erase(found); }
-    return renderer.Render(static_cast<IDirect3DDevice9*>(device), *frame);
+    const auto started = std::chrono::steady_clock::now();
+    const int32_t result = renderer.Render(static_cast<IDirect3DDevice9*>(device), *frame);
+    std::lock_guard<std::mutex> lock(frames_mutex); render_cost.Add(started);
+    return result;
 }
 extern "C" void RmlHost_DeviceLost() {
     renderer.DeviceLost();
@@ -435,4 +472,5 @@ extern "C" void RmlHost_Stats(rml_stats_t* out) {
     out->source_reloads = source_reloads; out->source_failures = source_failures;
     std::lock_guard<std::mutex> lock(frames_mutex);
     out->recorded_frames = recorded_frames; out->pending_frames = uint32_t(frames.size());
+    out->record_us = record_cost.Take(); out->render_us = render_cost.Take();
 }

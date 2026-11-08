@@ -24,7 +24,8 @@ def python_constants(client):
     value = lambda token: int(token) if token.isdigit() else enum[token]
     native = re.search(r'#define RECOIL_NATIVE_WIRE "([^"]+)"', text).group(1)
     names, params = [], []
-    for ident, name, table in re.findall(r'\{(RECOIL_[A-Z0-9_]+), "([a-z0-9_-]+)", (\w+), \d+,', text):
+    # Registry entries: {ID, "name", params table, its count, ...}; the count is derived in C (sizeof).
+    for ident, name, table in re.findall(r'\{(RECOIL_[A-Z0-9_]+), "([a-z0-9_-]+)", (\w+), [^,]+,', text):
         bounds = () if table == 'NULL' else tuple(
             (param, value(low), value(high)) for param, low, high in
             re.findall(r'\{"(\w+)", (\w+), (\w+)\}', re.search(table + r'\[\] = \{(.*?)\};', text, re.S).group(1)))

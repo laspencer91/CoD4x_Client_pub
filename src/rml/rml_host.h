@@ -23,6 +23,7 @@ typedef struct rml_stats_s {
     int32_t last_render_result;
     int visible, activations;
     uint32_t source_reloads, source_failures;
+    uint32_t record_us, render_us; /* average cost per frame since the previous call */
 } rml_stats_t;
 
 int RmlHost_Init(const rml_host_t *host);
